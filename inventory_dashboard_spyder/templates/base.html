@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Inventory Dashboard
+    </title>
+
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+
+        body {
+
+            margin: 0;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            background: #f4f6f8;
+
+            color: #17202a;
+
+        }
+
+
+        .container {
+
+            width: 95%;
+
+            max-width: 1400px;
+
+            margin: 30px auto;
+
+        }
+
+
+        h1 {
+
+            font-size: 32px;
+
+            margin-bottom: 5px;
+
+        }
+
+
+        h2 {
+
+            font-size: 22px;
+
+            margin-top: 0;
+
+        }
+
+
+        .subtitle {
+
+            color: #68737d;
+
+            margin-top: 5px;
+
+            margin-bottom: 25px;
+
+        }
+
+
+        .cards {
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, 1fr);
+
+            gap: 15px;
+
+            margin-bottom: 25px;
+
+        }
+
+
+        .card {
+
+            background: white;
+
+            border-radius: 10px;
+
+            padding: 22px;
+
+            border: 1px solid #e1e5e9;
+
+        }
+
+
+        .label {
+
+            font-size: 13px;
+
+            color: #68737d;
+
+            margin-bottom: 8px;
+
+        }
+
+
+        .value {
+
+            font-size: 25px;
+
+            font-weight: 700;
+
+        }
+
+
+        .panel {
+
+            background: white;
+
+            border-radius: 10px;
+
+            padding: 25px;
+
+            margin-bottom: 25px;
+
+            border: 1px solid #e1e5e9;
+
+        }
+
+
+        table {
+
+            width: 100%;
+
+            border-collapse: collapse;
+
+        }
+
+
+        th {
+
+            text-align: left;
+
+            font-size: 13px;
+
+            color: #68737d;
+
+            padding: 13px;
+
+            border-bottom: 2px solid #e5e7eb;
+
+        }
+
+
+        td {
+
+            padding: 15px 13px;
+
+            border-bottom: 1px solid #e5e7eb;
+
+        }
+
+
+        .btn {
+
+            display: inline-block;
+
+            padding: 9px 15px;
+
+            background: #17202a;
+
+            color: white;
+
+            text-decoration: none;
+
+            border-radius: 7px;
+
+            font-size: 14px;
+
+            font-weight: 600;
+
+        }
+
+
+        .btn:hover {
+
+            background: #263442;
+
+        }
+
+
+        .small {
+
+            font-size: 13px;
+
+            color: #68737d;
+
+            margin-top: 12px;
+
+        }
+
+
+        .empty {
+
+            text-align: center;
+
+            padding: 30px;
+
+            color: #68737d;
+
+        }
+
+
+        .flash {
+
+            padding: 14px 18px;
+
+            border-radius: 8px;
+
+            margin-bottom: 15px;
+
+        }
+
+
+        .flash.success {
+
+            background: #e8f7ed;
+
+            color: #176b35;
+
+        }
+
+
+        .flash.error {
+
+            background: #fdecec;
+
+            color: #9b1c1c;
+
+        }
+
+
+        @media (max-width: 900px) {
+
+            .cards {
+
+                grid-template-columns:
+                    repeat(2, 1fr);
+
+            }
+
+        }
+
+
+        @media (max-width: 600px) {
+
+            .cards {
+
+                grid-template-columns: 1fr;
+
+            }
+
+            .container {
+
+                width: 94%;
+
+            }
+
+            table {
+
+                font-size: 13px;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+
+    <!-- FLASH MESSAGES -->
+
+    {% with messages = get_flashed_messages(
+        with_categories=true
+    ) %}
+
+        {% if messages %}
+
+            {% for category, message in messages %}
+
+                <div
+                    class="flash {{ category }}"
+                >
+
+                    {{ message }}
+
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    {% endwith %}
+
+
+    {% block content %}
+
+    {% endblock %}
+
+
+</div>
+
+
+</body>
+
+</html>

@@ -1,0 +1,977 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.page-title h1 {
+    margin-bottom: 5px;
+}
+
+.subtitle {
+    color: #6b7280;
+    margin-top: 0;
+}
+
+
+/* DATE SELECTOR */
+
+.date-selector {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 10px;
+    padding: 15px 18px;
+    min-width: 240px;
+}
+
+.date-selector label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 7px;
+}
+
+.date-selector select {
+    width: 100%;
+    height: 42px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    font-size: 14px;
+    background: white;
+}
+
+
+/* ADD PRODUCT */
+
+.add-product-form {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr auto;
+    gap: 14px;
+    align-items: end;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.input-group label {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 7px;
+}
+
+.input-group input,
+.input-group select {
+    width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 15px;
+    background: white;
+}
+
+.add-product-btn {
+    height: 48px;
+    padding: 0 22px;
+    border: none;
+    border-radius: 8px;
+    background: #17202a;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+
+/* MANAGEMENT */
+
+.management-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 15px;
+}
+
+.management-box {
+    border: 1px solid #e1e5e9;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.management-box h3 {
+    margin-top: 0;
+}
+
+.management-box form {
+    margin-top: 15px;
+}
+
+.management-box select {
+    width: 100%;
+    height: 45px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    margin-bottom: 10px;
+}
+
+.delete-btn {
+    width: 100%;
+    height: 43px;
+    border: none;
+    border-radius: 7px;
+    background: #c0392b;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.clear-btn {
+    width: 100%;
+    height: 43px;
+    border: none;
+    border-radius: 7px;
+    background: #8e44ad;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+
+/* PALLETS */
+
+.pallet-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 15px;
+}
+
+.pallet-card {
+    text-decoration: none;
+    color: #17202a;
+    border: 1px solid #e1e5e9;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    background: white;
+}
+
+.pallet-card:hover {
+    border-color: #17202a;
+}
+
+
+/* CURRENT DATE */
+
+.date-banner {
+    background: #f7f8fa;
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+</style>
+
+
+<!-- ===================================================== -->
+<!-- HEADER -->
+<!-- ===================================================== -->
+
+<div class="page-header">
+
+    <div class="page-title">
+
+        <h1>
+            Product Dashboard
+        </h1>
+
+        <p class="subtitle">
+            Manage product stock across pallets P01–P10.
+        </p>
+
+    </div>
+
+
+    <!-- DATE DROPDOWN -->
+
+    <div class="date-selector">
+
+        <label>
+            Stock View
+        </label>
+
+        <select
+            onchange="changeDate(this.value)"
+        >
+
+            <option
+                value="total"
+                {% if selected_date == "total" %}
+                    selected
+                {% endif %}
+            >
+                Total Stock
+            </option>
+
+
+            {% for d in dates %}
+
+                <option
+                    value="{{ d }}"
+                    {% if selected_date == d %}
+                        selected
+                    {% endif %}
+                >
+
+                    {{ d[8:10] }} /
+                    {{ d[5:7] }} /
+                    {{ d[0:4] }}
+
+                </option>
+
+            {% endfor %}
+
+        </select>
+
+    </div>
+
+</div>
+
+
+{% if display_date %}
+
+<div class="date-banner">
+
+    Showing inventory as of:
+
+    <strong>
+        {{ display_date }}
+    </strong>
+
+</div>
+
+{% endif %}
+
+
+<!-- ===================================================== -->
+<!-- SUMMARY -->
+<!-- ===================================================== -->
+
+<div class="cards">
+
+    <div class="card">
+
+        <div class="label">
+            Current Stock
+        </div>
+
+        <div class="value">
+            {{ "%.2f"|format(total_stock) }} kg
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <div class="label">
+            Total Boxes
+        </div>
+
+        <div class="value">
+            {{ "%.2f"|format(total_boxes) }}
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <div class="label">
+            Inward
+        </div>
+
+        <div class="value">
+            {{ "%.2f"|format(total_inward) }} kg
+        </div>
+
+    </div>
+
+
+    <div class="card">
+
+        <div class="label">
+            Outward
+        </div>
+
+        <div class="value">
+            {{ "%.2f"|format(total_outward) }} kg
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- ADD PRODUCT -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Add Product / Stock
+    </h2>
+
+
+    <form
+        action="{{ url_for('add_product') }}"
+        method="post"
+        class="add-product-form"
+    >
+
+
+        <!-- PRODUCT -->
+
+        <div class="input-group">
+
+            <label>
+                Product Name
+            </label>
+
+            <input
+                type="text"
+                name="name"
+                placeholder="Enter product name"
+                required
+            >
+
+        </div>
+
+
+        <!-- KG PER BOX -->
+
+        <div class="input-group">
+
+            <label>
+                Weight / Box (kg)
+            </label>
+
+            <input
+                type="number"
+                name="box_weight"
+                placeholder="e.g. 12"
+                min="0.01"
+                step="0.01"
+                required
+            >
+
+        </div>
+
+
+        <!-- QUANTITY -->
+
+        <div class="input-group">
+
+            <label>
+                Quantity (Boxes)
+            </label>
+
+            <input
+                type="number"
+                name="boxes"
+                placeholder="e.g. 10"
+                min="0.01"
+                step="0.01"
+                required
+            >
+
+        </div>
+
+
+        <!-- PALLET -->
+
+        <div class="input-group">
+
+            <label>
+                Pallet
+            </label>
+
+            <select
+                name="pallet_no"
+                required
+            >
+
+                <option value="">
+                    Select Pallet
+                </option>
+
+                {% for n in range(1, 11) %}
+
+                    <option value="{{ n }}">
+                        P{{ "%02d"|format(n) }}
+                    </option>
+
+                {% endfor %}
+
+            </select>
+
+        </div>
+
+
+        <!-- DATE -->
+
+        <div class="input-group">
+
+            <label>
+                Date
+            </label>
+
+            <input
+                type="date"
+                name="transaction_date"
+                value="{{ request.args.get('date') if request.args.get('date') and request.args.get('date') != 'total' else '' }}"
+                required
+            >
+
+        </div>
+
+
+        <button
+            type="submit"
+            class="add-product-btn"
+        >
+            Add Stock
+        </button>
+
+
+    </form>
+
+
+    <p class="small">
+
+        If the product already exists, the quantity will be
+        added to the selected pallet instead of creating
+        another product.
+
+    </p>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- PRODUCTS -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Products
+    </h2>
+
+
+    {% if products %}
+
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th>
+                    Product
+                </th>
+
+                <th>
+                    Weight / Box
+                </th>
+
+                <th>
+                    Boxes
+                </th>
+
+                <th>
+                    Stock
+                </th>
+
+                <th>
+                    Pallets
+                </th>
+
+                <th>
+                    Action
+                </th>
+
+            </tr>
+
+        </thead>
+
+
+        <tbody>
+
+        {% for p in products %}
+
+            <tr>
+
+                <td>
+
+                    <strong>
+                        {{ p.name }}
+                    </strong>
+
+                </td>
+
+
+                <td>
+
+                    {{ "%.2f"|format(p.box_weight) }}
+                    kg
+
+                </td>
+
+
+                <td>
+
+                    {{ "%.2f"|format(p.total_boxes) }}
+
+                </td>
+
+
+                <td>
+
+                    <strong>
+
+                        {{ "%.2f"|format(p.total_weight) }}
+
+                        kg
+
+                    </strong>
+
+                </td>
+
+
+                <td>
+
+                    {{ p.pallet_count }}
+
+                </td>
+
+
+                <td>
+
+                    <a
+                        class="btn"
+                        href="{{ url_for(
+                            'product',
+                            product_id=p.id
+                        ) }}"
+                    >
+                        View Product
+                    </a>
+
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+
+    {% else %}
+
+        <div class="empty">
+
+            No inventory found for this date.
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- DATA MANAGEMENT -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Manage Data
+    </h2>
+
+    <p class="subtitle">
+        Use these options carefully.
+    </p>
+
+
+    <div class="management-grid">
+
+
+        <!-- DELETE PRODUCT -->
+
+        <div class="management-box">
+
+            <h3>
+                Delete Product
+            </h3>
+
+            <p class="small">
+
+                Permanently remove a product,
+                its stock and transaction history.
+
+            </p>
+
+
+            <form
+                method="post"
+                id="deleteProductForm"
+            >
+
+                <select
+                    id="productSelect"
+                    required
+                >
+
+                    <option value="">
+                        Select Product
+                    </option>
+
+                    {% for p in products %}
+
+                    <option value="{{ p.id }}">
+                        {{ p.name }}
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+
+                <button
+                    type="button"
+                    class="delete-btn"
+                    onclick="deleteProduct()"
+                >
+                    Delete Product
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- CLEAR PALLET -->
+
+        <div class="management-box">
+
+            <h3>
+                Clear Pallet
+            </h3>
+
+            <p class="small">
+
+                Remove all stock and transaction
+                history from one pallet.
+
+            </p>
+
+
+            <form
+                action="{{ url_for('clear_pallet') }}"
+                method="post"
+                onsubmit="return confirmClearPallet()"
+            >
+
+                <select
+                    name="pallet_no"
+                    required
+                >
+
+                    <option value="">
+                        Select Pallet
+                    </option>
+
+                    {% for n in range(1, 11) %}
+
+                        <option value="{{ n }}">
+                            P{{ "%02d"|format(n) }}
+                        </option>
+
+                    {% endfor %}
+
+                </select>
+
+
+                <button
+                    type="submit"
+                    class="delete-btn"
+                >
+                    Clear Pallet
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- CLEAR EVERYTHING -->
+
+        <div class="management-box">
+
+            <h3>
+                Clear All Data
+            </h3>
+
+            <p class="small">
+
+                Delete every product, stock entry
+                and transaction history.
+
+            </p>
+
+
+            <form
+                action="{{ url_for('clear_all_data') }}"
+                method="post"
+                onsubmit="return confirmClearAll()"
+            >
+
+                <button
+                    type="submit"
+                    class="clear-btn"
+                >
+                    Clear Everything
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- PALLETS -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Pallets
+    </h2>
+
+
+    <div class="pallet-grid">
+
+        {% for n in range(1, 11) %}
+
+        <a
+            class="pallet-card"
+            href="{{ url_for(
+                'pallet',
+                pallet_no=n
+            ) }}"
+        >
+
+            <strong>
+
+                📦 P{{ "%02d"|format(n) }}
+
+            </strong>
+
+            <br>
+
+            <span class="small">
+                View Products
+            </span>
+
+        </a>
+
+        {% endfor %}
+
+    </div>
+
+</div>
+
+
+<script>
+
+
+// =========================================================
+// CHANGE DATE
+// =========================================================
+
+function changeDate(value) {
+
+    window.location.href =
+        "/?date=" +
+        encodeURIComponent(value);
+
+}
+
+
+// =========================================================
+// DELETE PRODUCT
+// =========================================================
+
+function deleteProduct() {
+
+    const select =
+        document.getElementById(
+            "productSelect"
+        );
+
+
+    const productId =
+        select.value;
+
+
+    if (!productId) {
+
+        alert(
+            "Please select a product first."
+        );
+
+        return;
+
+    }
+
+
+    const productName =
+        select.options[
+            select.selectedIndex
+        ].text;
+
+
+    const confirmed = confirm(
+
+        "WARNING!\n\n" +
+
+        "Delete " +
+        productName +
+        "?\n\n" +
+
+        "This will permanently delete:\n" +
+
+        "• Product information\n" +
+
+        "• All pallet stock\n" +
+
+        "• Transaction history\n\n" +
+
+        "This cannot be undone."
+
+    );
+
+
+    if (!confirmed) {
+
+        return;
+
+    }
+
+
+    const form =
+        document.getElementById(
+            "deleteProductForm"
+        );
+
+
+    form.action =
+        "/delete_product/" +
+        productId;
+
+
+    form.submit();
+
+}
+
+
+// =========================================================
+// CLEAR PALLET
+// =========================================================
+
+function confirmClearPallet() {
+
+    return confirm(
+
+        "WARNING!\n\n" +
+
+        "This will delete ALL stock and " +
+        "transaction history from this pallet.\n\n" +
+
+        "Are you sure?"
+
+    );
+
+}
+
+
+// =========================================================
+// CLEAR EVERYTHING
+// =========================================================
+
+function confirmClearAll() {
+
+    const first =
+        confirm(
+
+            "WARNING!\n\n" +
+
+            "You are about to DELETE ALL " +
+            "INVENTORY DATA.\n\n" +
+
+            "This includes:\n" +
+
+            "• Products\n" +
+
+            "• Pallet stock\n" +
+
+            "• Transaction history\n\n" +
+
+            "Continue?"
+
+        );
+
+
+    if (!first) {
+
+        return false;
+
+    }
+
+
+    return confirm(
+
+        "FINAL CONFIRMATION\n\n" +
+
+        "EVERYTHING WILL BE PERMANENTLY DELETED.\n\n" +
+
+        "Click OK to continue."
+
+    );
+
+}
+
+</script>
+
+
+{% endblock %}

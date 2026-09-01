@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+.product-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.product-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.summary-box {
+    background: white;
+    border-radius: 10px;
+    padding: 22px;
+    border: 1px solid #e1e5e9;
+}
+
+.summary-label {
+    font-size: 13px;
+    color: #68737d;
+    margin-bottom: 8px;
+}
+
+.summary-value {
+    font-size: 25px;
+    font-weight: 700;
+}
+
+.update-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 15px;
+    align-items: end;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 7px;
+}
+
+.form-group input,
+.form-group select {
+    height: 46px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    font-size: 15px;
+    box-sizing: border-box;
+}
+
+.update-btn {
+    height: 46px;
+    padding: 0 20px;
+    border: none;
+    border-radius: 7px;
+    background: #17202a;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pallet-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.pallet-table th,
+.pallet-table td {
+    padding: 14px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+.pallet-link {
+    text-decoration: none;
+    font-weight: 700;
+    color: #17202a;
+}
+
+@media (max-width: 800px) {
+
+    .product-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .update-form {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+</style>
+
+
+<!-- ===================================================== -->
+<!-- HEADER -->
+<!-- ===================================================== -->
+
+<div class="product-header">
+
+    <div>
+
+        <h1>
+            {{ product.name }}
+        </h1>
+
+        <p class="subtitle">
+            {{ "%.2f"|format(product.box_weight) }} kg per box
+        </p>
+
+    </div>
+
+
+    <a
+        href="{{ url_for('dashboard') }}"
+        class="btn"
+    >
+        ← Dashboard
+    </a>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- SUMMARY -->
+<!-- ===================================================== -->
+
+<div class="product-summary">
+
+    <div class="summary-box">
+
+        <div class="summary-label">
+            Current Boxes
+        </div>
+
+        <div class="summary-value">
+            {{ "%.2f"|format(total_boxes) }}
+        </div>
+
+    </div>
+
+
+    <div class="summary-box">
+
+        <div class="summary-label">
+            Current Weight
+        </div>
+
+        <div class="summary-value">
+            {{ "%.2f"|format(total_weight) }} kg
+        </div>
+
+    </div>
+
+
+    <div class="summary-box">
+
+        <div class="summary-label">
+            Weight / Box
+        </div>
+
+        <div class="summary-value">
+            {{ "%.2f"|format(product.box_weight) }} kg
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- UPDATE STOCK -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Update Stock
+    </h2>
+
+
+    <form
+        action="{{ url_for('update_stock') }}"
+        method="post"
+        class="update-form"
+    >
+
+
+        <input
+            type="hidden"
+            name="product_id"
+            value="{{ product.id }}"
+        >
+
+
+        <!-- PALLET -->
+
+        <div class="form-group">
+
+            <label>
+                Pallet
+            </label>
+
+            <select
+                name="pallet_no"
+                required
+            >
+
+                <option value="">
+                    Select Pallet
+                </option>
+
+                <option value="1">P01</option>
+                <option value="2">P02</option>
+                <option value="3">P03</option>
+                <option value="4">P04</option>
+                <option value="5">P05</option>
+                <option value="6">P06</option>
+                <option value="7">P07</option>
+                <option value="8">P08</option>
+                <option value="9">P09</option>
+                <option value="10">P10</option>
+
+            </select>
+
+        </div>
+
+
+        <!-- MOVEMENT -->
+
+        <div class="form-group">
+
+            <label>
+                Movement
+            </label>
+
+            <select
+                name="movement_type"
+                required
+            >
+
+                <option value="Inward">
+                    Inward
+                </option>
+
+                <option value="Outward">
+                    Outward
+                </option>
+
+            </select>
+
+        </div>
+
+
+        <!-- BOXES -->
+
+        <div class="form-group">
+
+            <label>
+                Number of Boxes
+            </label>
+
+            <input
+                type="number"
+                name="boxes"
+                placeholder="Enter boxes"
+                min="0.01"
+                step="0.01"
+                required
+            >
+
+        </div>
+
+
+        <button
+            type="submit"
+            class="update-btn"
+        >
+            Update Stock
+        </button>
+
+
+    </form>
+
+
+    <p class="small">
+
+        Weight will automatically be calculated using
+
+        {{ "%.2f"|format(product.box_weight) }} kg per box.
+
+    </p>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- PRODUCT PALLETS -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Pallets Containing {{ product.name }}
+    </h2>
+
+
+    <table class="pallet-table">
+
+        <thead>
+
+            <tr>
+
+                <th>
+                    Pallet
+                </th>
+
+                <th>
+                    Boxes
+                </th>
+
+                <th>
+                    Weight
+                </th>
+
+            </tr>
+
+        </thead>
+
+
+        <tbody>
+
+        {% for pallet in pallets %}
+
+            <tr>
+
+                <td>
+
+                    <a
+                        class="pallet-link"
+                        href="{{ url_for('pallet', pallet_no=pallet.pallet_no) }}"
+                    >
+
+                        P{{ "%02d"|format(pallet.pallet_no) }}
+
+                    </a>
+
+                </td>
+
+
+                <td>
+
+                    {{ "%.2f"|format(pallet.boxes) }}
+
+                </td>
+
+
+                <td>
+
+                    {{
+                        "%.2f"|format(
+                            pallet.boxes *
+                            product.box_weight
+                        )
+                    }}
+                    kg
+
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- TRANSACTION HISTORY -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Transaction History
+    </h2>
+
+
+    {% if history %}
+
+    <table>
+
+        <thead>
+
+            <tr>
+
+                <th>
+                    Date
+                </th>
+
+                <th>
+                    Movement
+                </th>
+
+                <th>
+                    Pallet
+                </th>
+
+                <th>
+                    Boxes
+                </th>
+
+                <th>
+                    Weight
+                </th>
+
+            </tr>
+
+        </thead>
+
+
+        <tbody>
+
+        {% for item in history %}
+
+            <tr>
+
+                <td>
+                    {{ item.created_at }}
+                </td>
+
+
+                <td>
+                    {{ item.movement_type }}
+                </td>
+
+
+                <td>
+                    P{{ "%02d"|format(item.pallet_no) }}
+                </td>
+
+
+                <td>
+                    {{ "%.2f"|format(item.boxes) }}
+                </td>
+
+
+                <td>
+
+                    {{
+                        "%.2f"|format(
+                            item.boxes *
+                            product.box_weight
+                        )
+                    }}
+                    kg
+
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+
+    {% else %}
+
+    <div class="empty">
+        No transactions yet.
+    </div>
+
+    {% endif %}
+
+</div>
+
+
+{% endblock %}

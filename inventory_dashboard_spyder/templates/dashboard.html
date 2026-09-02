@@ -16,177 +16,169 @@
     margin-bottom: 5px;
 }
 
-.subtitle {
-    color: #6b7280;
-    margin-top: 0;
+.page-title p {
+    margin: 0;
+    color: #777;
 }
 
-
-/* ===================================================== */
-/* DATE SELECTOR */
-/* ===================================================== */
-
-.date-selector {
-    background: white;
-    border: 1px solid #e1e5e9;
-    border-radius: 10px;
-    padding: 15px 18px;
-    min-width: 240px;
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
 }
-
-.date-selector label {
-    display: block;
-    font-size: 13px;
-    font-weight: 600;
-    margin-bottom: 7px;
-}
-
-.date-selector select {
-    width: 100%;
-    height: 42px;
-    padding: 0 10px;
-    border: 1px solid #d1d5db;
-    border-radius: 7px;
-    font-size: 14px;
-    background: white;
-}
-
-
-/* ===================================================== */
-/* ACTION BUTTON */
-/* ===================================================== */
 
 .export-btn {
-    display: inline-block;
-    padding: 12px 20px;
-    background: #17202a;
-    color: white;
     text-decoration: none;
+    padding: 10px 18px;
     border-radius: 8px;
+    background: #222;
+    color: white;
     font-weight: 600;
-    white-space: nowrap;
 }
 
 .export-btn:hover {
-    opacity: 0.92;
+    opacity: 0.85;
 }
 
-
-/* ===================================================== */
-/* FORMS */
-/* ===================================================== */
-
-.forms-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px;
-    margin-bottom: 20px;
-}
-
-.form-panel {
-    background: white;
-    border: 1px solid #e1e5e9;
-    border-radius: 10px;
-    padding: 22px;
-}
-
-.form-panel h2 {
-    margin-top: 0;
-    margin-bottom: 5px;
-}
-
-.form-description {
-    color: #6b7280;
-    font-size: 14px;
-    margin-top: 0;
-    margin-bottom: 20px;
-}
-
-.form-fields {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
-}
-
-.input-group {
+.date-selector {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
-.input-group.full {
-    grid-column: 1 / -1;
-}
-
-.input-group label {
-    font-size: 14px;
+.date-selector label {
     font-weight: 600;
-    margin-bottom: 7px;
 }
 
-.input-group input,
-.input-group select {
-    width: 100%;
-    height: 46px;
-    padding: 0 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    font-size: 15px;
-    background: white;
-    box-sizing: border-box;
+.date-selector input {
+    padding: 9px 12px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
 }
 
-.input-group input:focus,
-.input-group select:focus {
-    outline: none;
-    border-color: #17202a;
-    box-shadow: 0 0 0 2px rgba(23, 32, 42, 0.08);
-}
-
-
-/* ===================================================== */
-/* FORM BUTTON */
-/* ===================================================== */
-
-.form-submit {
-    width: 100%;
-    height: 46px;
-    margin-top: 16px;
+.date-selector button {
+    padding: 9px 15px;
     border: none;
-    border-radius: 8px;
-    background: #17202a;
+    border-radius: 7px;
+    background: #222;
     color: white;
-    font-size: 15px;
-    font-weight: 600;
     cursor: pointer;
 }
 
-.form-submit:hover {
-    opacity: 0.92;
-}
-
-.help-text {
-    color: #6b7280;
-    font-size: 13px;
-    margin-top: 10px;
-}
-
-
-/* ===================================================== */
-/* DATE BANNER */
-/* ===================================================== */
-
 .date-banner {
-    background: #f7f8fa;
-    border-radius: 8px;
-    padding: 12px 15px;
-    margin-bottom: 20px;
-    font-size: 14px;
+    background: #f5f5f5;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 25px;
+    font-weight: 600;
 }
 
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-bottom: 30px;
+}
 
-/* ===================================================== */
-/* PALLETS */
-/* ===================================================== */
+.summary-card {
+    background: white;
+    border-radius: 12px;
+    padding: 22px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.summary-card h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: #777;
+}
+
+.summary-card .value {
+    font-size: 30px;
+    font-weight: 700;
+}
+
+.section {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 25px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.section h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.form-group label {
+    font-weight: 600;
+}
+
+.form-group input,
+.form-group select {
+    padding: 11px 12px;
+    border: 1px solid #ccc;
+    border-radius: 7px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.form-full {
+    grid-column: 1 / -1;
+}
+
+.primary-btn {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 7px;
+    background: #222;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.primary-btn:hover {
+    opacity: 0.85;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+    padding: 13px 12px;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+.data-table th {
+    background: #f7f7f7;
+    font-weight: 700;
+}
+
+.data-table tr:hover {
+    background: #fafafa;
+}
 
 .pallet-grid {
     display: grid;
@@ -195,213 +187,160 @@
 }
 
 .pallet-card {
-    text-decoration: none;
-    color: #17202a;
-    border: 1px solid #e1e5e9;
+    border: 1px solid #ddd;
     border-radius: 10px;
-    padding: 20px;
-    text-align: center;
-    background: white;
+    padding: 18px;
+    background: #fafafa;
 }
 
-.pallet-card:hover {
-    border-color: #17202a;
+.pallet-card h3 {
+    margin-top: 0;
 }
 
+.pallet-card p {
+    margin: 7px 0;
+}
 
-/* ===================================================== */
-/* RESPONSIVE */
-/* ===================================================== */
+.pallet-card a {
+    display: inline-block;
+    margin-top: 10px;
+    text-decoration: none;
+    color: #222;
+    font-weight: 600;
+}
 
-@media (max-width: 1100px) {
+@media (max-width: 1000px) {
 
-    .page-header {
-        flex-wrap: wrap;
+    .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 
-    .forms-grid {
-        grid-template-columns: 1fr;
+    .pallet-grid {
+        grid-template-columns: repeat(3, 1fr);
     }
-
-    .management-grid {
-        grid-template-columns: 1fr;
-    }
-
 }
 
 @media (max-width: 700px) {
 
     .page-header {
         flex-direction: column;
-        align-items: stretch;
+        align-items: flex-start;
     }
 
-    .date-selector {
-        width: auto;
-    }
-
-    .form-fields {
+    .form-grid {
         grid-template-columns: 1fr;
     }
 
-    .input-group.full {
+    .form-full {
         grid-column: auto;
     }
 
-    .pallet-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .summary-grid {
+        grid-template-columns: 1fr;
     }
 
+    .pallet-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 </style>
 
 
-<!-- ===================================================== -->
-<!-- HEADER -->
-<!-- ===================================================== -->
+<!-- PAGE HEADER -->
 
 <div class="page-header">
 
     <div class="page-title">
-
-        <h1>
-            Product Dashboard
-        </h1>
-
-        <p class="subtitle">
-            Manage product stock across pallets P01–P10.
-        </p>
-
+        <h1>Product Dashboard</h1>
+        <p>Inventory Management System</p>
     </div>
 
+    <div class="header-actions">
 
-    <!-- EXPORT -->
-
-    <a
-        href="{{ url_for('export_page') }}"
-        class="export-btn"
-    >
-        📄 Export Data / GRN PDF
-    </a>
-
-
-    <!-- DATE -->
-
-    <div class="date-selector">
-
-        <label>
-            Stock View
-        </label>
-
-        <select
-            onchange="changeDate(this.value)"
-        >
-
-            <option
-                value="total"
-                {% if selected_date == "total" %}
-                    selected
-                {% endif %}
-            >
-                Total Stock
-            </option>
-
-
-            {% for d in dates %}
-
-                <option
-                    value="{{ d }}"
-                    {% if selected_date == d %}
-                        selected
-                    {% endif %}
-                >
-                    {{ d[8:10] }} /
-                    {{ d[5:7] }} /
-                    {{ d[0:4] }}
-                </option>
-
-            {% endfor %}
-
-        </select>
+        <a href="{{ url_for('export') }}" class="export-btn">
+            Export
+        </a>
 
     </div>
 
 </div>
 
 
-<!-- ===================================================== -->
-<!-- DATE BANNER -->
-<!-- ===================================================== -->
+<!-- DATE SELECTOR -->
 
-{% if display_date %}
+<div class="date-selector">
+
+    <label for="stockDate">
+        Stock View Date:
+    </label>
+
+    <input
+        type="date"
+        id="stockDate"
+        value="{{ selected_date }}"
+    >
+
+    <button onclick="changeDate()">
+        View
+    </button>
+
+</div>
+
+
+<!-- DATE BANNER -->
 
 <div class="date-banner">
 
-    Showing inventory as of:
-
-    <strong>
-        {{ display_date }}
-    </strong>
+    Showing inventory for:
+    {{ selected_date }}
 
 </div>
 
-{% endif %}
 
+<!-- SUMMARY -->
 
-<!-- ===================================================== -->
-<!-- SUMMARY CARDS -->
-<!-- ===================================================== -->
+<div class="summary-grid">
 
-<div class="cards">
+    <div class="summary-card">
 
-    <div class="card">
-
-        <div class="label">
-            Current Stock
-        </div>
+        <h3>Current Stock</h3>
 
         <div class="value">
-            {{ "%.2f"|format(total_stock) }} kg
+            {{ total_stock }}
         </div>
 
     </div>
 
 
-    <div class="card">
+    <div class="summary-card">
 
-        <div class="label">
-            Total Boxes
-        </div>
+        <h3>Total Boxes</h3>
 
         <div class="value">
-            {{ "%.2f"|format(total_boxes) }}
+            {{ total_boxes }}
         </div>
 
     </div>
 
 
-    <div class="card">
+    <div class="summary-card">
 
-        <div class="label">
-            Inward
-        </div>
+        <h3>Inward</h3>
 
         <div class="value">
-            {{ "%.2f"|format(total_inward) }} kg
+            {{ total_inward }}
         </div>
 
     </div>
 
 
-    <div class="card">
+    <div class="summary-card">
 
-        <div class="label">
-            Outward
-        </div>
+        <h3>Outward</h3>
 
         <div class="value">
-            {{ "%.2f"|format(total_outward) }} kg
+            {{ total_outward }}
         </div>
 
     </div>
@@ -409,498 +348,297 @@
 </div>
 
 
-<!-- ===================================================== -->
-<!-- PRODUCT + STOCK FORMS -->
-<!-- ===================================================== -->
+<!-- ADD PRODUCT -->
 
-<div class="forms-grid">
+<div class="section">
 
+    <h2>Add New Product</h2>
 
-    <!-- ================================================= -->
-    <!-- CREATE NEW PRODUCT -->
-    <!-- ================================================= -->
+    <form
+        action="{{ url_for('add_product') }}"
+        method="POST"
+    >
 
-    <div class="form-panel">
+        <div class="form-grid">
 
-        <h2>
-            Add New Product
-        </h2>
+            <div class="form-group">
 
-        <p class="form-description">
+                <label>
+                    Product Name
+                </label>
 
-            Create a new product in the inventory system.
-
-            You only need the product name and
-            weight per box.
-
-        </p>
-
-
-        <form
-            action="{{ url_for('add_product') }}"
-            method="post"
-        >
-
-            <!--
-                IMPORTANT:
-                This tells Flask that this form is creating
-                a NEW PRODUCT.
-
-                The backend will NOT ask for:
-                - boxes
-                - pallet
-                - date
-            -->
-
-            <input
-                type="hidden"
-                name="product_mode"
-                value="create"
-            >
-
-
-            <div class="form-fields">
-
-
-                <!-- PRODUCT NAME -->
-
-                <div class="input-group">
-
-                    <label>
-                        Product Name
-                    </label>
-
-                    <input
-                        type="text"
-                        name="name"
-                        placeholder="e.g. Sweet Corn"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- WEIGHT -->
-
-                <div class="input-group">
-
-                    <label>
-                        Weight / Box (kg)
-                    </label>
-
-                    <input
-                        type="number"
-                        name="box_weight"
-                        placeholder="e.g. 12"
-                        min="0.01"
-                        step="0.01"
-                        required
-                    >
-
-                </div>
-
+                <input
+                    type="text"
+                    name="name"
+                    required
+                >
 
             </div>
 
 
-            <button
-                type="submit"
-                class="form-submit"
-            >
-                + Create Product
-            </button>
-
-
-            <p class="help-text">
-
-                Creating a product does not add stock
-                to any pallet.
-
-            </p>
-
-        </form>
-
-    </div>
-
-
-    <!-- ================================================= -->
-    <!-- ADD STOCK -->
-    <!-- ================================================= -->
-
-    <div class="form-panel">
-
-        <h2>
-            Add Stock
-        </h2>
-
-        <p class="form-description">
-
-            Add or remove stock from an existing product
-            and assign it to a pallet.
-
-        </p>
-
-
-        <form
-            action="{{ url_for('add_product') }}"
-            method="post"
-        >
-
-            <!--
-                IMPORTANT:
-                This tells Flask that this form is
-                updating STOCK, not creating a product.
-            -->
-
-            <input
-                type="hidden"
-                name="product_mode"
-                value="stock"
-            >
-
-
-            <div class="form-fields">
-
-
-                <!-- PRODUCT -->
-
-                <div class="input-group full">
-
-                    <label>
-                        Product
-                    </label>
-
-                    <select
-                        name="product_id"
-                        required
-                    >
-
-                        <option value="">
-                            Select Product
-                        </option>
-
-
-                        {% for p in all_products %}
-
-                            <option
-                                value="{{ p.id }}"
-                            >
-
-                                {{ p.name }}
-                                —
-                                {{ "%.2f"|format(p.box_weight) }}
-                                kg/box
-
-                            </option>
-
-                        {% endfor %}
-
-                    </select>
-
-                </div>
-
-
-                <!-- MOVEMENT -->
-
-                <div class="input-group">
-
-                    <label>
-                        Movement
-                    </label>
-
-                    <select
-                        name="movement_type"
-                        required
-                    >
-
-                        <option value="Inward">
-                            Inward
-                        </option>
-
-                        <option value="Outward">
-                            Outward
-                        </option>
-
-                    </select>
-
-                </div>
-
-
-                <!-- QUANTITY -->
-
-                <div class="input-group">
-
-                    <label>
-                        Quantity (Boxes)
-                    </label>
-
-                    <input
-                        type="number"
-                        name="boxes"
-                        placeholder="e.g. 10"
-                        min="0.01"
-                        step="0.01"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- PALLET -->
-
-                <div class="input-group">
-
-                    <label>
-                        Pallet
-                    </label>
-
-                    <select
-                        name="pallet_no"
-                        required
-                    >
-
-                        <option value="">
-                            Select Pallet
-                        </option>
-
-
-                        {% for n in range(1, 11) %}
-
-                            <option value="{{ n }}">
-
-                                P{{ "%02d"|format(n) }}
-
-                            </option>
-
-                        {% endfor %}
-
-                    </select>
-
-                </div>
-
-
-                <!-- DATE -->
-
-                <div class="input-group">
-
-                    <label>
-                        Date
-                    </label>
-
-                    <input
-                        type="date"
-                        name="transaction_date"
-                        value="{{ today }}"
-                        required
-                    >
-
-                </div>
+            <div class="form-group">
+
+                <label>
+                    Box Weight
+                </label>
+
+                <input
+                    type="number"
+                    step="0.01"
+                    name="box_weight"
+                    required
+                >
 
             </div>
 
 
-            <button
-                type="submit"
-                class="form-submit"
-            >
-                Update Stock
-            </button>
+            <div class="form-full">
 
+                <button
+                    type="submit"
+                    class="primary-btn"
+                >
+                    Add Product
+                </button>
 
-            <p class="help-text">
+            </div>
 
-                Outward stock cannot exceed the stock
-                currently available on the selected pallet.
+        </div>
 
-            </p>
-
-        </form>
-
-    </div>
+    </form>
 
 </div>
 
 
-<!-- ===================================================== -->
-<!-- PRODUCTS -->
-<!-- ===================================================== -->
+<!-- ADD STOCK -->
 
-<div class="panel">
+<div class="section">
 
-    <h2>
-        Products
-    </h2>
+    <h2>Add Stock</h2>
 
+    <form
+        action="{{ url_for('generate_grn') }}"
+        method="POST"
+    >
 
-    {% if products %}
+        <div class="form-grid">
 
-    <table>
+            <div class="form-group">
 
-        <thead>
-
-            <tr>
-
-                <th>
+                <label>
                     Product
-                </th>
+                </label>
 
-                <th>
-                    Weight / Box
-                </th>
+                <select
+                    name="product_id"
+                    required
+                >
 
-                <th>
-                    Boxes
-                </th>
+                    <option value="">
+                        Select Product
+                    </option>
 
-                <th>
-                    Stock
-                </th>
+                    {% for product in products %}
 
-                <th>
-                    Pallets
-                </th>
+                    <option value="{{ product.id }}">
+                        {{ product.name }}
+                    </option>
 
-                <th>
-                    Action
-                </th>
+                    {% endfor %}
 
-            </tr>
+                </select>
 
-        </thead>
+            </div>
 
 
-        <tbody>
+            <div class="form-group">
 
-        {% for p in products %}
+                <label>
+                    Quantity
+                </label>
 
-            <tr>
+                <input
+                    type="number"
+                    name="quantity"
+                    min="1"
+                    required
+                >
 
-                <td>
-
-                    <strong>
-                        {{ p.name }}
-                    </strong>
-
-                </td>
-
-
-                <td>
-
-                    {{ "%.2f"|format(p.box_weight) }}
-                    kg
-
-                </td>
+            </div>
 
 
-                <td>
+            <div class="form-group">
 
-                    {{ "%.2f"|format(p.total_boxes) }}
+                <label>
+                    Date
+                </label>
 
-                </td>
+                <input
+                    type="date"
+                    name="date"
+                    value="{{ selected_date }}"
+                    required
+                >
 
-
-                <td>
-
-                    <strong>
-
-                        {{ "%.2f"|format(p.total_weight) }}
-                        kg
-
-                    </strong>
-
-                </td>
+            </div>
 
 
-                <td>
+            <div class="form-group">
 
-                    {{ p.pallet_count }}
+                <label>
+                    Pallet Number
+                </label>
 
-                </td>
+                <input
+                    type="number"
+                    name="pallet_no"
+                    min="1"
+                    max="10"
+                    required
+                >
 
-
-                <td>
-
-                    <a
-                        class="btn"
-                        href="{{ url_for(
-                            'product',
-                            product_id=p.id
-                        ) }}"
-                    >
-                        View Product
-                    </a>
-
-                </td>
-
-            </tr>
-
-        {% endfor %}
-
-        </tbody>
-
-    </table>
+            </div>
 
 
-    {% else %}
+            <div class="form-full">
 
-        <div class="empty">
+                <button
+                    type="submit"
+                    class="primary-btn"
+                >
+                    Add Stock
+                </button>
 
-            {% if selected_date == "total" %}
-
-                No inventory found.
-
-                Create a product above and then
-                add stock to a pallet.
-
-            {% else %}
-
-                No inventory found for this date.
-
-            {% endif %}
+            </div>
 
         </div>
 
-    {% endif %}
+    </form>
 
 </div>
 
 
-<!-- ===================================================== -->
+<!-- PRODUCTS -->
+
+<div class="section">
+
+    <h2>Products</h2>
+
+    <div class="table-wrapper">
+
+        <table class="data-table">
+
+            <thead>
+
+                <tr>
+
+                    <th>
+                        Product
+                    </th>
+
+                    <th>
+                        Box Weight
+                    </th>
+
+                    <th>
+                        Stock
+                    </th>
+
+                    <th>
+                        Inward
+                    </th>
+
+                    <th>
+                        Outward
+                    </th>
+
+                    <th>
+                        Action
+                    </th>
+
+                </tr>
+
+            </thead>
+
+
+            <tbody>
+
+                {% for product in products %}
+
+                <tr>
+
+                    <td>
+                        {{ product.name }}
+                    </td>
+
+                    <td>
+                        {{ product.box_weight }}
+                    </td>
+
+                    <td>
+                        {{ product.stock }}
+                    </td>
+
+                    <td>
+                        {{ product.inward }}
+                    </td>
+
+                    <td>
+                        {{ product.outward }}
+                    </td>
+
+                    <td>
+
+                        <a href="{{ url_for('product_detail', product_id=product.id) }}">
+                            View
+                        </a>
+
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+</div>
+
+
 <!-- PALLETS -->
-<!-- ===================================================== -->
 
-<div class="panel">
+<div class="section">
 
-    <h2>
-        Pallets
-    </h2>
-
+    <h2>Pallets</h2>
 
     <div class="pallet-grid">
 
-        {% for n in range(1, 11) %}
+        {% for pallet in pallets %}
 
-        <a
-            class="pallet-card"
-            href="{{ url_for(
-                'pallet',
-                pallet_no=n
-            ) }}"
-        >
+        <div class="pallet-card">
 
-            <strong>
+            <h3>
+                Pallet {{ pallet.number }}
+            </h3>
 
-                📦 P{{ "%02d"|format(n) }}
+            <p>
+                Boxes:
+                {{ pallet.boxes }}
+            </p>
 
-            </strong>
+            <p>
+                Weight:
+                {{ pallet.weight }}
+            </p>
 
-            <br>
+            <a href="{{ url_for('pallet', pallet_no=pallet.number) }}">
+                View Pallet →
+            </a>
 
-            <span class="small">
-                View Products
-            </span>
-
-        </a>
+        </div>
 
         {% endfor %}
 
@@ -911,88 +649,38 @@
 
 <script>
 
+function changeDate() {
 
-// =========================================================
-// CHANGE DATE
-// =========================================================
+    const date =
+        document.getElementById("stockDate").value;
 
-function changeDate(value) {
+    if (!date) {
+        return;
+    }
 
     window.location.href =
-        "/?date=" +
-        encodeURIComponent(value);
+        "/?date=" + date;
 
 }
 
 
-// =========================================================
-// CLEAR PALLET
-// =========================================================
-
 function confirmClearPallet() {
 
     return confirm(
-
-        "WARNING!\n\n" +
-
-        "This will remove ALL CURRENT STOCK " +
-        "from the selected pallet.\n\n" +
-
-        "The removed stock will be recorded " +
-        "as an outward transaction.\n\n" +
-
-        "Are you sure?"
-
+        "Are you sure you want to clear this pallet?"
     );
 
 }
 
 
-// =========================================================
-// CLEAR EVERYTHING
-// =========================================================
-
 function confirmClearAll() {
 
-    const first =
-        confirm(
-
-            "WARNING!\n\n" +
-
-            "You are about to DELETE ALL " +
-            "INVENTORY DATA.\n\n" +
-
-            "This includes:\n" +
-
-            "• Products\n" +
-            "• Pallet stock\n" +
-            "• Transaction history\n\n" +
-
-            "Continue?"
-
-        );
-
-
-    if (!first) {
-
-        return false;
-
-    }
-
-
     return confirm(
-
-        "FINAL CONFIRMATION\n\n" +
-
-        "EVERYTHING WILL BE PERMANENTLY DELETED.\n\n" +
-
-        "Click OK to continue."
-
+        "Are you sure you want to clear ALL inventory data? This cannot be undone."
     );
 
 }
 
 </script>
-
 
 {% endblock %}

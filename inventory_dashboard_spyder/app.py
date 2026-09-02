@@ -790,6 +790,15 @@ def add_product():
 @app.route("/product/<int:product_id>")
 def product(product_id):
 
+    # Optional ?date=YYYY-MM-DD - when present, show stock as it
+    # stood at the end of that day plus that day's transactions,
+    # instead of the live current stock / full history.
+    selected_date = request.args.get("date", "").strip()
+
+    if selected_date and not valid_date(selected_date):
+        flash("Invalid date selected.", "error")
+        return redirect(url_for("product", product_id=product_id))
+
     conn = get_db()
 
     try:
@@ -837,10 +846,81 @@ def product(product_id):
                 t.id DESC
         """, (product_id,)).fetchall()
 
+        # -------------------------------------------------
+        # DATE-SPECIFIC VIEW
+        # -------------------------------------------------
+
+        date_pallets = None
+        date_transactions = None
+        date_total_boxes = None
+        date_total_weight = None
+        display_date = None
+
+        if selected_date:
+
+            display_date = format_date(selected_date)
+
+            date_pallets_raw = conn.execute("""
+                SELECT
+                    pa.pallet_no,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN t.movement_type = 'Inward'
+                                    THEN t.boxes
+                                WHEN t.movement_type = 'Outward'
+                                    THEN -t.boxes
+                                ELSE 0
+                            END
+                        ), 0
+                    ) AS boxes
+
+                FROM pallets pa
+                LEFT JOIN transactions t
+                    ON pa.id = t.pallet_id
+                    AND t.product_id = ?
+                    AND t.transaction_date <= ?
+
+                GROUP BY pa.id
+                HAVING boxes > 0
+                ORDER BY pa.pallet_no
+            """, (product_id, selected_date)).fetchall()
+
+            date_pallets = [dict(row) for row in date_pallets_raw]
+
+            date_total_boxes = sum(
+                p["boxes"] for p in date_pallets
+            )
+
+            date_total_weight = (
+                date_total_boxes * product["box_weight"]
+            )
+
+            date_transactions = conn.execute("""
+                SELECT
+                    t.movement_type,
+                    t.boxes,
+                    t.created_at,
+                    pa.pallet_no
+                FROM transactions t
+                JOIN pallets pa
+                    ON pa.id = t.pallet_id
+                WHERE t.product_id = ?
+                  AND t.transaction_date = ?
+                ORDER BY t.id DESC
+            """, (product_id, selected_date)).fetchall()
+
         return render_template(
             "product.html",
             product=product,
             pallets=pallets,
+            selected_date=selected_date,
+            display_date=display_date,
+            date_pallets=date_pallets,
+            date_transactions=date_transactions,
+            date_total_boxes=date_total_boxes,
+            date_total_weight=date_total_weight,
             total_boxes=total_boxes,
             total_weight=total_weight,
             history=history

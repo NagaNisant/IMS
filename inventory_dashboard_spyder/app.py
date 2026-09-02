@@ -1690,9 +1690,7 @@ def generate_grn():
 
         # All columns MUST stay inside the A4 page.
         # A4 width is ~595 pt; with 30 pt margins the usable
-        # width is ~535 pt. The previous version extended to x=625,
-        # which caused the Qty / Unit / Net Weight columns to overlap
-        # or fall outside the page.
+        # width is ~535 pt.
         columns = [
             30,   # S.No
             58,   # Description
@@ -1701,8 +1699,9 @@ def generate_grn():
             335,  # MFG Date
             385,  # Expiry
             435,  # Qty
-            480,  # Ord. Unit
-            565   # Net Weight / right edge
+            475,  # Ord. Unit
+            515,  # Net Weight
+            565   # right edge
         ]
 
         for x in columns[1:]:
@@ -1740,8 +1739,8 @@ def generate_grn():
             339,
             389,
             439,
-            484,
-            505
+            479,
+            519
         ]
 
         pdf.setFont(
@@ -1840,19 +1839,19 @@ def generate_grn():
             )
 
             pdf.drawRightString(
-                472,
+                471,
                 y,
                 f"{item['qty']:.2f}"
             )
 
             pdf.drawString(
-                484,
+                479,
                 y,
                 str(item["unit"])[:6]
             )
 
             pdf.drawRightString(
-                558,
+                561,
                 y,
                 f"{item['net_weight']:.2f}"
             )
@@ -1888,13 +1887,13 @@ def generate_grn():
             )
 
             pdf.drawRightString(
-                472,
+                471,
                 table_bottom + 7,
                 f"{total_qty:.2f}"
             )
 
             pdf.drawRightString(
-                558,
+                561,
                 table_bottom + 7,
                 f"{total_weight:.2f}"
             )

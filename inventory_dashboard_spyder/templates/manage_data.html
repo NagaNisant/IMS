@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+
+{% block title %}
+Manage Data - IMS
+{% endblock %}
+
+
+{% block content %}
+
+<style>
+
+.manage-header {
+
+    margin-bottom: 25px;
+}
+
+.manage-header h1 {
+
+    margin-bottom: 6px;
+}
+
+.manage-header p {
+
+    margin: 0;
+
+    color: #777;
+}
+
+
+.manage-grid {
+
+    display: grid;
+
+    grid-template-columns:
+        repeat(3, 1fr);
+
+    gap: 20px;
+}
+
+
+.manage-card {
+
+    background: white;
+
+    border-radius: 12px;
+
+    padding: 25px;
+
+    box-shadow:
+        0 2px 10px
+        rgba(0,0,0,0.06);
+}
+
+
+.manage-card h2 {
+
+    margin-top: 0;
+
+    margin-bottom: 10px;
+}
+
+
+.manage-card p {
+
+    color: #777;
+
+    line-height: 1.5;
+
+    min-height: 45px;
+}
+
+
+.manage-card form {
+
+    margin-top: 20px;
+}
+
+
+.manage-card select,
+.manage-card input {
+
+    width: 100%;
+
+    padding: 11px;
+
+    border: 1px solid #ccc;
+
+    border-radius: 7px;
+
+    margin-bottom: 12px;
+}
+
+
+.danger-btn {
+
+    width: 100%;
+
+    padding: 11px;
+
+    border: none;
+
+    border-radius: 7px;
+
+    background: #222;
+
+    color: white;
+
+    cursor: pointer;
+
+    font-weight: 600;
+}
+
+
+.danger-btn:hover {
+
+    opacity: 0.85;
+}
+
+
+@media (max-width: 900px) {
+
+    .manage-grid {
+
+        grid-template-columns:
+            1fr;
+    }
+
+}
+
+</style>
+
+
+<div class="manage-header">
+
+    <h1>
+        Manage Data
+    </h1>
+
+    <p>
+        Delete products, clear pallets, or clear all inventory data.
+    </p>
+
+</div>
+
+
+<div class="manage-grid">
+
+
+    <!-- DELETE PRODUCT -->
+
+    <div class="manage-card">
+
+        <h2>
+            Delete Product
+        </h2>
+
+        <p>
+            Permanently remove a product from the inventory system.
+        </p>
+
+
+        <form
+            method="POST"
+            action="{{ url_for('delete_product', product_id=0) }}"
+            onsubmit="return deleteProduct(event)"
+        >
+
+            <select
+                id="deleteProductSelect"
+                required
+            >
+
+                <option value="">
+                    Select Product
+                </option>
+
+                {% for product in all_products %}
+
+                <option value="{{ product.id }}">
+                    {{ product.name }}
+                </option>
+
+                {% endfor %}
+
+            </select>
+
+
+            <button
+                type="submit"
+                class="danger-btn"
+            >
+                Delete Product
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- CLEAR PALLET -->
+
+    <div class="manage-card">
+
+        <h2>
+            Clear Pallet
+        </h2>
+
+        <p>
+            Remove all inventory currently assigned to a selected pallet.
+        </p>
+
+
+        <form
+            method="POST"
+            action="{{ url_for('clear_pallet') }}"
+            onsubmit="return confirmClearPallet()"
+        >
+
+            <select
+                name="pallet_no"
+                required
+            >
+
+                <option value="">
+                    Select Pallet
+                </option>
+
+                {% for i in range(1, 11) %}
+
+                <option value="{{ i }}">
+                    Pallet {{ i }}
+                </option>
+
+                {% endfor %}
+
+            </select>
+
+
+            <button
+                type="submit"
+                class="danger-btn"
+            >
+                Clear Pallet
+            </button>
+
+        </form>
+
+    </div>
+
+
+    <!-- CLEAR ALL DATA -->
+
+    <div class="manage-card">
+
+        <h2>
+            Clear All Data
+        </h2>
+
+        <p>
+            Permanently remove all inventory transactions and data.
+        </p>
+
+
+        <form
+            method="POST"
+            action="{{ url_for('clear_all_data') }}"
+            onsubmit="return confirmClearAll()"
+        >
+
+            <button
+                type="submit"
+                class="danger-btn"
+            >
+                Clear All Data
+            </button>
+
+        </form>
+
+    </div>
+
+
+</div>
+
+
+<script>
+
+
+function deleteProduct(event) {
+
+    const select =
+        document.getElementById(
+            "deleteProductSelect"
+        );
+
+
+    const productId =
+        select.value;
+
+
+    if (!productId) {
+
+        alert(
+            "Please select a product."
+        );
+
+        return false;
+    }
+
+
+    const confirmed =
+        confirm(
+            "Are you sure you want to delete this product?"
+        );
+
+
+    if (!confirmed) {
+
+        return false;
+    }
+
+
+    event.target.action =
+        "/delete_product/" +
+        productId;
+
+
+    return true;
+}
+
+
+
+function confirmClearPallet() {
+
+    return confirm(
+        "Are you sure you want to clear this pallet? This cannot be undone."
+    );
+}
+
+
+
+function confirmClearAll() {
+
+    return confirm(
+        "WARNING: This will delete ALL inventory data. Are you absolutely sure?"
+    );
+}
+
+
+</script>
+
+{% endblock %}

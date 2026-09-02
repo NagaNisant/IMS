@@ -267,6 +267,41 @@ def dashboard():
 
             display_date = None
 
+            pallets_raw = conn.execute("""
+                SELECT
+                    pa.pallet_no,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN s.boxes > 0 THEN s.boxes
+                                ELSE 0
+                            END
+                        ), 0
+                    ) AS total_boxes,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN s.boxes > 0
+                                THEN s.boxes * p.box_weight
+                                ELSE 0
+                            END
+                        ), 0
+                    ) AS total_weight
+
+                FROM pallets pa
+                LEFT JOIN stock s
+                    ON pa.id = s.pallet_id
+                LEFT JOIN products p
+                    ON p.id = s.product_id
+
+                GROUP BY pa.id
+                ORDER BY pa.pallet_no
+            """).fetchall()
+
+            pallets = [dict(row) for row in pallets_raw]
+
         # -------------------------------------------------
         # DATE-WISE STOCK
         # -------------------------------------------------
@@ -377,10 +412,52 @@ def dashboard():
 
             display_date = format_date(selected_date)
 
+            pallets_raw = conn.execute("""
+                SELECT
+                    pa.pallet_no,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN t.movement_type = 'Inward'
+                                    THEN t.boxes
+                                WHEN t.movement_type = 'Outward'
+                                    THEN -t.boxes
+                                ELSE 0
+                            END
+                        ), 0
+                    ) AS total_boxes,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN t.movement_type = 'Inward'
+                                    THEN t.boxes * p.box_weight
+                                WHEN t.movement_type = 'Outward'
+                                    THEN -t.boxes * p.box_weight
+                                ELSE 0
+                            END
+                        ), 0
+                    ) AS total_weight
+
+                FROM pallets pa
+                LEFT JOIN transactions t
+                    ON pa.id = t.pallet_id
+                    AND t.transaction_date <= ?
+                LEFT JOIN products p
+                    ON p.id = t.product_id
+
+                GROUP BY pa.id
+                ORDER BY pa.pallet_no
+            """, (selected_date,)).fetchall()
+
+            pallets = [dict(row) for row in pallets_raw]
+
         return render_template(
             "dashboard.html",
             products=products,
             all_products=all_products,
+            pallets=pallets,
             total_stock=total_stock,
             total_boxes=total_boxes,
             total_inward=total_inward,

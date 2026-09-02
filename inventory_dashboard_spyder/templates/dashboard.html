@@ -359,6 +359,8 @@
         method="POST"
     >
 
+        <input type="hidden" name="product_mode" value="create">
+
         <div class="form-grid">
 
             <div class="form-group">
@@ -417,7 +419,7 @@
     <h2>Add Stock</h2>
 
     <form
-        action="{{ url_for('generate_grn') }}"
+        action="{{ url_for('add_product') }}"
         method="POST"
     >
 
@@ -438,7 +440,7 @@
                         Select Product
                     </option>
 
-                    {% for product in products %}
+                    {% for product in all_products %}
 
                     <option value="{{ product.id }}">
                         {{ product.name }}
@@ -454,13 +456,38 @@
             <div class="form-group">
 
                 <label>
-                    Quantity
+                    Movement
+                </label>
+
+                <select
+                    name="movement_type"
+                    required
+                >
+
+                    <option value="Inward">
+                        Inward
+                    </option>
+
+                    <option value="Outward">
+                        Outward
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Quantity (Boxes)
                 </label>
 
                 <input
                     type="number"
-                    name="quantity"
-                    min="1"
+                    name="boxes"
+                    step="0.01"
+                    min="0.01"
                     required
                 >
 
@@ -475,8 +502,8 @@
 
                 <input
                     type="date"
-                    name="date"
-                    value="{{ selected_date }}"
+                    name="transaction_date"
+                    value="{{ today }}"
                     required
                 >
 
@@ -541,15 +568,15 @@
                     </th>
 
                     <th>
-                        Stock
+                        Stock (Boxes)
                     </th>
 
                     <th>
-                        Inward
+                        Weight
                     </th>
 
                     <th>
-                        Outward
+                        Pallets Used
                     </th>
 
                     <th>
@@ -576,20 +603,20 @@
                     </td>
 
                     <td>
-                        {{ product.stock }}
+                        {{ product.total_boxes }}
                     </td>
 
                     <td>
-                        {{ product.inward }}
+                        {{ product.total_weight }}
                     </td>
 
                     <td>
-                        {{ product.outward }}
+                        {{ product.pallet_count }}
                     </td>
 
                     <td>
 
-                        <a href="{{ url_for('product_detail', product_id=product.id) }}">
+                        <a href="{{ url_for('product', product_id=product.id) }}">
                             View
                         </a>
 
@@ -621,20 +648,20 @@
         <div class="pallet-card">
 
             <h3>
-                Pallet {{ pallet.number }}
+                Pallet P{{ "%02d"|format(pallet.pallet_no) }}
             </h3>
 
             <p>
                 Boxes:
-                {{ pallet.boxes }}
+                {{ pallet.total_boxes }}
             </p>
 
             <p>
                 Weight:
-                {{ pallet.weight }}
+                {{ pallet.total_weight }}
             </p>
 
-            <a href="{{ url_for('pallet', pallet_no=pallet.number) }}">
+            <a href="{{ url_for('pallet', pallet_no=pallet.pallet_no) }}">
                 View Pallet →
             </a>
 

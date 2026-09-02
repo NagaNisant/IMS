@@ -776,7 +776,31 @@ def pallet(pallet_no):
     finally:
         close_quietly(conn)
 
+# =========================================================
+# MANAGE DATA PAGE
+# =========================================================
 
+@app.route("/manage-data")
+def manage_data():
+
+    conn = get_db()
+
+    try:
+
+        all_products = conn.execute("""
+            SELECT id, name, box_weight
+            FROM products
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+        return render_template(
+            "manage_data.html",
+            all_products=all_products
+        )
+
+    finally:
+
+        close_quietly(conn)
 # =========================================================
 # CLEAR PALLET
 # =========================================================

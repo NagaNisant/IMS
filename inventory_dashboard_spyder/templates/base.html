@@ -12,7 +12,9 @@
     >
 
     <title>
-        Inventory Dashboard
+        {% block title %}
+        IMS
+        {% endblock %}
     </title>
 
 
@@ -32,257 +34,176 @@
                 Helvetica,
                 sans-serif;
 
-            background: #f4f6f8;
+            background: #f4f5f7;
 
-            color: #17202a;
-
+            color: #222;
         }
 
 
-        .container {
+        /* ================================
+           TOP NAVIGATION
+        ================================= */
 
-            width: 95%;
-
-            max-width: 1400px;
-
-            margin: 30px auto;
-
-        }
-
-
-        h1 {
-
-            font-size: 32px;
-
-            margin-bottom: 5px;
-
-        }
-
-
-        h2 {
-
-            font-size: 22px;
-
-            margin-top: 0;
-
-        }
-
-
-        .subtitle {
-
-            color: #68737d;
-
-            margin-top: 5px;
-
-            margin-bottom: 25px;
-
-        }
-
-
-        .cards {
-
-            display: grid;
-
-            grid-template-columns:
-                repeat(4, 1fr);
-
-            gap: 15px;
-
-            margin-bottom: 25px;
-
-        }
-
-
-        .card {
-
-            background: white;
-
-            border-radius: 10px;
-
-            padding: 22px;
-
-            border: 1px solid #e1e5e9;
-
-        }
-
-
-        .label {
-
-            font-size: 13px;
-
-            color: #68737d;
-
-            margin-bottom: 8px;
-
-        }
-
-
-        .value {
-
-            font-size: 25px;
-
-            font-weight: 700;
-
-        }
-
-
-        .panel {
-
-            background: white;
-
-            border-radius: 10px;
-
-            padding: 25px;
-
-            margin-bottom: 25px;
-
-            border: 1px solid #e1e5e9;
-
-        }
-
-
-        table {
+        .top-nav {
 
             width: 100%;
 
-            border-collapse: collapse;
+            height: 64px;
 
+            background: white;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            padding: 0 30px;
+
+            border-bottom: 1px solid #e5e5e5;
+
+            position: sticky;
+
+            top: 0;
+
+            z-index: 1000;
         }
 
 
-        th {
-
-            text-align: left;
-
-            font-size: 13px;
-
-            color: #68737d;
-
-            padding: 13px;
-
-            border-bottom: 2px solid #e5e7eb;
-
-        }
-
-
-        td {
-
-            padding: 15px 13px;
-
-            border-bottom: 1px solid #e5e7eb;
-
-        }
-
-
-        .btn {
-
-            display: inline-block;
-
-            padding: 9px 15px;
-
-            background: #17202a;
-
-            color: white;
+        .nav-brand {
 
             text-decoration: none;
 
-            border-radius: 7px;
+            color: #222;
 
-            font-size: 14px;
+            font-size: 24px;
 
-            font-weight: 600;
+            font-weight: 800;
 
+            letter-spacing: 1px;
         }
 
 
-        .btn:hover {
+        .nav-menu {
 
-            background: #263442;
-
+            position: relative;
         }
 
 
-        .small {
+        .nav-menu summary {
 
-            font-size: 13px;
+            list-style: none;
 
-            color: #68737d;
+            cursor: pointer;
 
-            margin-top: 12px;
-
-        }
-
-
-        .empty {
-
-            text-align: center;
-
-            padding: 30px;
-
-            color: #68737d;
-
-        }
-
-
-        .flash {
-
-            padding: 14px 18px;
+            padding: 10px 14px;
 
             border-radius: 8px;
 
+            font-weight: 600;
+
+            user-select: none;
+        }
+
+
+        .nav-menu summary::-webkit-details-marker {
+            display: none;
+        }
+
+
+        .nav-menu summary:hover {
+
+            background: #f2f2f2;
+        }
+
+
+        .nav-dropdown {
+
+            position: absolute;
+
+            right: 0;
+
+            top: calc(100% + 8px);
+
+            width: 190px;
+
+            background: white;
+
+            border: 1px solid #ddd;
+
+            border-radius: 10px;
+
+            box-shadow:
+                0 8px 25px
+                rgba(0,0,0,0.12);
+
+            overflow: hidden;
+        }
+
+
+        .nav-dropdown a {
+
+            display: block;
+
+            padding: 13px 16px;
+
+            text-decoration: none;
+
+            color: #222;
+
+            font-weight: 500;
+        }
+
+
+        .nav-dropdown a:hover {
+
+            background: #f5f5f5;
+        }
+
+
+        /* ================================
+           MAIN CONTAINER
+        ================================= */
+
+        .container {
+
+            max-width: 1400px;
+
+            margin: 0 auto;
+
+            padding: 30px;
+        }
+
+
+        /* ================================
+           FLASH MESSAGES
+        ================================= */
+
+        .flash {
+
+            padding: 12px 16px;
+
             margin-bottom: 15px;
 
-        }
+            border-radius: 8px;
 
+            background: #eeeeee;
 
-        .flash.success {
-
-            background: #e8f7ed;
-
-            color: #176b35;
-
-        }
-
-
-        .flash.error {
-
-            background: #fdecec;
-
-            color: #9b1c1c;
-
-        }
-
-
-        @media (max-width: 900px) {
-
-            .cards {
-
-                grid-template-columns:
-                    repeat(2, 1fr);
-
-            }
-
+            border: 1px solid #ddd;
         }
 
 
         @media (max-width: 600px) {
 
-            .cards {
+            .top-nav {
 
-                grid-template-columns: 1fr;
-
+                padding: 0 15px;
             }
+
 
             .container {
 
-                width: 94%;
-
-            }
-
-            table {
-
-                font-size: 13px;
-
+                padding: 20px 15px;
             }
 
         }
@@ -295,40 +216,79 @@
 <body>
 
 
-<div class="container">
+    <!-- NAVIGATION -->
+
+    <nav class="top-nav">
+
+        <a
+            class="nav-brand"
+            href="{{ url_for('dashboard') }}"
+        >
+            IMS
+        </a>
 
 
-    <!-- FLASH MESSAGES -->
+        <details class="nav-menu">
 
-    {% with messages = get_flashed_messages(
-        with_categories=true
-    ) %}
+            <summary>
+                ☰ Menu
+            </summary>
 
-        {% if messages %}
 
-            {% for category, message in messages %}
+            <div class="nav-dropdown">
 
-                <div
-                    class="flash {{ category }}"
+                <a
+                    href="{{ url_for('dashboard') }}"
                 >
-
-                    {{ message }}
-
-                </div>
-
-            {% endfor %}
-
-        {% endif %}
-
-    {% endwith %}
+                    📦 Inventory
+                </a>
 
 
-    {% block content %}
+                <a
+                    href="{{ url_for('manage_data') }}"
+                >
+                    🗄️ Manage Data
+                </a>
 
-    {% endblock %}
+            </div>
+
+        </details>
+
+    </nav>
 
 
-</div>
+    <!-- MAIN CONTENT -->
+
+    <main class="container">
+
+
+        <!-- FLASH MESSAGES -->
+
+        {% with messages = get_flashed_messages() %}
+
+            {% if messages %}
+
+                {% for message in messages %}
+
+                    <div class="flash">
+
+                        {{ message }}
+
+                    </div>
+
+                {% endfor %}
+
+            {% endif %}
+
+        {% endwith %}
+
+
+        {% block content %}
+
+        {% endblock %}
+
+
+    </main>
 
 
 </body>

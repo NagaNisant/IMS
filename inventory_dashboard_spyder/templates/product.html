@@ -209,43 +209,7 @@
 
     </div>
 
-    <h3>Pallets as of {{ display_date }}</h3>
-
-    {% if date_pallets %}
-
-    <table class="pallet-table">
-        <thead>
-            <tr>
-                <th>Pallet</th>
-                <th>Boxes</th>
-                <th>Weight</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for pallet in date_pallets %}
-            <tr>
-                <td>
-                    <a
-                        class="pallet-link"
-                        href="{{ url_for('pallet', pallet_no=pallet.pallet_no) }}"
-                    >
-                        P{{ "%02d"|format(pallet.pallet_no) }}
-                    </a>
-                </td>
-                <td>{{ "%.2f"|format(pallet.boxes) }}</td>
-                <td>
-                    {{ "%.2f"|format(pallet.boxes * product.box_weight) }} kg
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-
-    {% else %}
-    <div class="empty">No stock on any pallet as of this date.</div>
-    {% endif %}
-
-    <h3 style="margin-top:20px;">Transactions on {{ display_date }}</h3>
+    <h3>Transactions on {{ display_date }}</h3>
 
     {% if date_transactions %}
 
@@ -256,7 +220,6 @@
                 <th>Pallet</th>
                 <th>Boxes</th>
                 <th>Weight</th>
-                <th>Recorded At</th>
             </tr>
         </thead>
         <tbody>
@@ -268,7 +231,6 @@
                 <td>
                     {{ "%.2f"|format(item.boxes * product.box_weight) }} kg
                 </td>
-                <td>{{ item.created_at }}</td>
             </tr>
         {% endfor %}
         </tbody>
@@ -465,7 +427,7 @@
             <tr>
 
                 <td>
-                    {{ item.created_at }}
+                    {{ item.transaction_date }}
                 </td>
 
 

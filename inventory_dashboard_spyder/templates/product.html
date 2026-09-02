@@ -75,6 +75,13 @@
     cursor: pointer;
 }
 
+.date-filter-form {
+    display: flex;
+    gap: 15px;
+    align-items: end;
+    flex-wrap: wrap;
+}
+
 .pallet-table {
     width: 100%;
     border-collapse: collapse;
@@ -133,6 +140,145 @@
     >
         ← Dashboard
     </a>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- VIEW STOCK / TRANSACTIONS FOR A DATE -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        View by Date
+    </h2>
+
+    <form
+        method="get"
+        action="{{ url_for('product', product_id=product.id) }}"
+        class="date-filter-form"
+    >
+
+        <div class="form-group">
+            <label>Date</label>
+            <input
+                type="date"
+                name="date"
+                value="{{ selected_date }}"
+                required
+            >
+        </div>
+
+        <button type="submit" class="update-btn">
+            View
+        </button>
+
+        {% if selected_date %}
+        <a
+            href="{{ url_for('product', product_id=product.id) }}"
+            class="btn"
+        >
+            Clear
+        </a>
+        {% endif %}
+
+    </form>
+
+    {% if selected_date %}
+
+    <div class="product-summary" style="margin-top:20px;">
+
+        <div class="summary-box">
+            <div class="summary-label">
+                Boxes as of {{ display_date }}
+            </div>
+            <div class="summary-value">
+                {{ "%.2f"|format(date_total_boxes) }}
+            </div>
+        </div>
+
+        <div class="summary-box">
+            <div class="summary-label">
+                Weight as of {{ display_date }}
+            </div>
+            <div class="summary-value">
+                {{ "%.2f"|format(date_total_weight) }} kg
+            </div>
+        </div>
+
+    </div>
+
+    <h3>Pallets as of {{ display_date }}</h3>
+
+    {% if date_pallets %}
+
+    <table class="pallet-table">
+        <thead>
+            <tr>
+                <th>Pallet</th>
+                <th>Boxes</th>
+                <th>Weight</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for pallet in date_pallets %}
+            <tr>
+                <td>
+                    <a
+                        class="pallet-link"
+                        href="{{ url_for('pallet', pallet_no=pallet.pallet_no) }}"
+                    >
+                        P{{ "%02d"|format(pallet.pallet_no) }}
+                    </a>
+                </td>
+                <td>{{ "%.2f"|format(pallet.boxes) }}</td>
+                <td>
+                    {{ "%.2f"|format(pallet.boxes * product.box_weight) }} kg
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% else %}
+    <div class="empty">No stock on any pallet as of this date.</div>
+    {% endif %}
+
+    <h3 style="margin-top:20px;">Transactions on {{ display_date }}</h3>
+
+    {% if date_transactions %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Movement</th>
+                <th>Pallet</th>
+                <th>Boxes</th>
+                <th>Weight</th>
+                <th>Recorded At</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in date_transactions %}
+            <tr>
+                <td>{{ item.movement_type }}</td>
+                <td>P{{ "%02d"|format(item.pallet_no) }}</td>
+                <td>{{ "%.2f"|format(item.boxes) }}</td>
+                <td>
+                    {{ "%.2f"|format(item.boxes * product.box_weight) }} kg
+                </td>
+                <td>{{ item.created_at }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% else %}
+    <div class="empty">No transactions recorded on this date.</div>
+    {% endif %}
+
+    {% endif %}
 
 </div>
 

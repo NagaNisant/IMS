@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+    <title>Export Goods Received Note</title>
+
+    <style>
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            margin: 0;
+            padding: 30px;
+            color: #17202a;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: #6b7280;
+            margin-top: 0;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .card h2 {
+            margin-top: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .field label {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .field input,
+        .field select {
+            height: 42px;
+            padding: 0 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 7px;
+            font-size: 14px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .items-table th:nth-child(1) { width: 21%; }
+        .items-table th:nth-child(2) { width: 11%; }
+        .items-table th:nth-child(3) { width: 9%; }
+        .items-table th:nth-child(4) { width: 12%; }
+        .items-table th:nth-child(5) { width: 12%; }
+        .items-table th:nth-child(6) { width: 9%; }
+        .items-table th:nth-child(7) { width: 10%; }
+        .items-table th:nth-child(8) { width: 7%; }
+
+        .items-table th,
+        .items-table td {
+            vertical-align: middle;
+            word-break: break-word;
+        }
+
+        .items-table th,
+        .items-table td {
+            border: 1px solid #ddd;
+            padding: 7px 6px;
+        }
+
+        .items-table th {
+            background: #f4f5f6;
+        }
+
+        .items-table input,
+        .items-table select {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            height: 36px;
+            padding: 0 6px;
+            font-size: 13px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        .add-item {
+            margin-top: 15px;
+            padding: 10px 18px;
+            background: #34495e;
+            color: white;
+            border: none;
+            border-radius: 7px;
+            cursor: pointer;
+        }
+
+        .remove {
+            background: #c0392b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            padding: 7px 10px;
+            cursor: pointer;
+        }
+
+        .generate {
+            width: 100%;
+            height: 52px;
+            border: none;
+            border-radius: 8px;
+            background: #17202a;
+            color: white;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .back {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #17202a;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        @media(max-width:800px) {
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+    <a
+        href="{{ url_for('dashboard') }}"
+        class="back"
+    >
+        ← Back to Dashboard
+    </a>
+
+
+    <h1>
+        Export Data to PDF
+    </h1>
+
+    <p class="subtitle">
+        Enter the details below to generate the Goods Received Note.
+        Fields can be left blank if the information is unavailable.
+    </p>
+
+
+    <form
+        action="{{ url_for('generate_grn') }}"
+        method="POST"
+    >
+
+
+        <!-- =================================================
+             VOUCHER DETAILS
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                Shipment / Voucher Details
+            </h2>
+
+            <div class="grid">
+
+
+                <div class="field">
+
+                    <label>
+                        Voucher No.
+                    </label>
+
+                    <input
+                        type="text"
+                        name="voucher_no"
+                        placeholder="e.g. BAGRN/50/26-27"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Date
+                    </label>
+
+                    <input
+                        type="date"
+                        name="grn_date"
+                        value="{{ today }}"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Ref
+                    </label>
+
+                    <input
+                        type="text"
+                        name="ref"
+                        placeholder="e.g. GSTI/2627/1093"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Vehicle No.
+                    </label>
+
+                    <input
+                        type="text"
+                        name="vehicle_no"
+                        placeholder="e.g. KA51 AL 0920"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Credit Days
+                    </label>
+
+                    <input
+                        type="text"
+                        name="credit_days"
+                        placeholder="e.g. 30"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Driver Name
+                    </label>
+
+                    <input
+                        type="text"
+                        name="driver_name"
+                        placeholder="Driver name"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Product Temp
+                    </label>
+
+                    <input
+                        type="text"
+                        name="product_temp"
+                        placeholder="e.g. -16.4"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Out Time
+                    </label>
+
+                    <input
+                        type="text"
+                        name="out_time"
+                        placeholder="e.g. 17:00"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Driver Contact No.
+                    </label>
+
+                    <input
+                        type="text"
+                        name="driver_contact"
+                        placeholder="Driver contact"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        In Time
+                    </label>
+
+                    <input
+                        type="text"
+                        name="in_time"
+                        placeholder="e.g. 12:00"
+                    >
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             PACKING DETAILS
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                Packing Details
+            </h2>
+
+            <div class="grid">
+
+                <div class="field">
+
+                    <label>
+                        Packing Slip No.
+                    </label>
+
+                    <input
+                        type="text"
+                        name="packing_slip"
+                    >
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        No. of Boxes
+                    </label>
+
+                    <input
+                        type="text"
+                        name="number_boxes"
+                    >
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             GOODS
+             ================================================= -->
+
+        <div class="card">
+
+            <h2>
+                Goods Details
+            </h2>
+
+
+            <table
+                class="items-table"
+                id="itemsTable"
+            >
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Product
+                        </th>
+
+                        <th>
+                            Weight / Box
+                        </th>
+
+                        <th>
+                            Batch
+                        </th>
+
+                        <th>
+                            MFG Date
+                        </th>
+
+                        <th>
+                            Expiry
+                        </th>
+
+                        <th>
+                            Qty
+                        </th>
+
+                        <th>
+                            Unit
+                        </th>
+
+                        <th>
+                            Remove
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="itemsBody">
+
+                </tbody>
+
+            </table>
+
+
+            <button
+                type="button"
+                class="add-item"
+                onclick="addItem()"
+            >
+                + Add Item
+            </button>
+
+        </div>
+
+
+        <!-- =================================================
+             GENERATE
+             ================================================= -->
+
+        <button
+            type="submit"
+            class="generate"
+        >
+            Generate PDF
+        </button>
+
+
+    </form>
+
+</div>
+
+
+<script>
+
+const products = [
+
+{% for p in products %}
+
+    {
+        id: "{{ p.id }}",
+        name: "{{ p.name|replace('"', '\\"') }}",
+        weight: "{{ p.box_weight }}"
+    },
+
+{% endfor %}
+
+];
+
+
+function addItem() {
+
+    const tbody =
+        document.getElementById(
+            "itemsBody"
+        );
+
+
+    const row =
+        document.createElement(
+            "tr"
+        );
+
+
+    let options =
+        '<option value="">Select Product</option>';
+
+
+    products.forEach(function(product) {
+
+        options +=
+
+            '<option value="' +
+            product.id +
+            '" data-weight="' +
+            product.weight +
+            '">' +
+
+            product.name +
+
+            '</option>';
+
+    });
+
+
+    row.innerHTML = `
+
+        <td>
+
+            <select
+                name="product_id[]"
+                onchange="updateWeight(this)"
+                required
+            >
+
+                ${options}
+
+            </select>
+
+        </td>
+
+
+        <td>
+
+            <input
+                type="text"
+                class="weight"
+                readonly
+                placeholder="Auto"
+            >
+
+        </td>
+
+
+        <td>
+
+            <input
+                type="text"
+                name="batch[]"
+            >
+
+        </td>
+
+
+        <td>
+
+            <input
+                type="text"
+                name="mfg_date[]"
+                placeholder="dd-mm-yyyy"
+            >
+
+        </td>
+
+
+        <td>
+
+            <input
+                type="text"
+                name="expiry[]"
+                placeholder="dd-mm-yyyy"
+            >
+
+        </td>
+
+
+        <td>
+
+            <input
+                type="number"
+                name="quantity[]"
+                min="0"
+                step="0.01"
+                required
+            >
+
+        </td>
+
+
+        <td>
+
+            <select
+                name="order_unit[]"
+            >
+
+                <option>
+                    Box
+                </option>
+
+                <option>
+                    Bag
+                </option>
+
+                <option>
+                    Pack
+                </option>
+
+                <option>
+                    Unit
+                </option>
+
+            </select>
+
+        </td>
+
+
+        <td>
+
+            <button
+                type="button"
+                class="remove"
+                onclick="this.closest('tr').remove()"
+            >
+                X
+            </button>
+
+        </td>
+
+    `;
+
+
+    tbody.appendChild(row);
+
+}
+
+
+function updateWeight(select) {
+
+    const option =
+        select.options[
+            select.selectedIndex
+        ];
+
+
+    const weight =
+        option.getAttribute(
+            "data-weight"
+        );
+
+
+    const row =
+        select.closest("tr");
+
+
+    const input =
+        row.querySelector(
+            ".weight"
+        );
+
+
+    input.value =
+        weight
+        ? weight + " kg"
+        : "";
+
+}
+
+
+// Automatically create first item
+
+addItem();
+
+</script>
+
+
+</body>
+
+</html>

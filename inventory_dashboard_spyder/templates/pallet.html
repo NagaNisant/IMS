@@ -1,0 +1,288 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+.pallet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.pallet-title {
+    margin: 0;
+}
+
+.back-btn {
+    text-decoration: none;
+    padding: 10px 18px;
+    background: #17202a;
+    color: white;
+    border-radius: 7px;
+    font-weight: 600;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.summary-card {
+    background: white;
+    border: 1px solid #e1e5e9;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.summary-label {
+    color: #6b7280;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
+
+.summary-value {
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.product-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.product-table th,
+.product-table td {
+    padding: 14px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+.product-table th {
+    background: #f7f8fa;
+    font-weight: 600;
+}
+
+.empty {
+    padding: 40px;
+    text-align: center;
+    color: #6b7280;
+}
+
+@media (max-width: 700px) {
+
+    .pallet-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
+
+</style>
+
+
+<!-- ===================================================== -->
+<!-- HEADER -->
+<!-- ===================================================== -->
+
+<div class="pallet-header">
+
+    <div>
+
+        <h1 class="pallet-title">
+            Pallet P{{ "%02d"|format(pallet.pallet_no) }}
+        </h1>
+
+        <p class="subtitle">
+            Products currently stored in this pallet
+        </p>
+
+    </div>
+
+
+    <a
+        href="{{ url_for('dashboard') }}"
+        class="back-btn"
+    >
+        ← Back to Dashboard
+    </a>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- SUMMARY -->
+<!-- ===================================================== -->
+
+<div class="summary-grid">
+
+    <div class="summary-card">
+
+        <div class="summary-label">
+            Total Boxes
+        </div>
+
+        <div class="summary-value">
+
+            {{ "%.2f"|format(total_boxes) }}
+
+        </div>
+
+    </div>
+
+
+    <div class="summary-card">
+
+        <div class="summary-label">
+            Total Weight
+        </div>
+
+        <div class="summary-value">
+
+            {{ "%.2f"|format(total_weight) }} kg
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- ===================================================== -->
+<!-- PRODUCTS -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+    <h2>
+        Products in P{{ "%02d"|format(pallet.pallet_no) }}
+    </h2>
+
+
+    {% if products %}
+
+    <table class="product-table">
+
+        <thead>
+
+            <tr>
+
+                <th>
+                    Product
+                </th>
+
+                <th>
+                    Weight / Box
+                </th>
+
+                <th>
+                    Number of Boxes
+                </th>
+
+                <th>
+                    Total Weight
+                </th>
+
+                <th>
+                    Action
+                </th>
+
+            </tr>
+
+        </thead>
+
+
+        <tbody>
+
+        {% for product in products %}
+
+            <tr>
+
+                <td>
+
+                    <strong>
+                        {{ product.name }}
+                    </strong>
+
+                </td>
+
+
+                <td>
+
+                    {{ "%.2f"|format(product.box_weight) }}
+                    kg
+
+                </td>
+
+
+                <td>
+
+                    {{ "%.2f"|format(product.boxes) }}
+
+                </td>
+
+
+                <td>
+
+                    <strong>
+
+                        {{ "%.2f"|format(product.weight) }}
+                        kg
+
+                    </strong>
+
+                </td>
+
+
+                <td>
+
+                    <a
+                        class="btn"
+                        href="{{ url_for(
+                            'product',
+                            product_id=product.id
+                        ) }}"
+                    >
+                        View Product
+                    </a>
+
+                </td>
+
+            </tr>
+
+        {% endfor %}
+
+        </tbody>
+
+    </table>
+
+
+    {% else %}
+
+        <div class="empty">
+
+            <h3>
+                This pallet is empty
+            </h3>
+
+            <p>
+                No products are currently stored
+                in P{{ "%02d"|format(pallet.pallet_no) }}.
+            </p>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+
+{% endblock %}

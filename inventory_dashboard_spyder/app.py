@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 import sqlite3
+import re
 from datetime import datetime, date
 from io import BytesIO
 import os
@@ -572,15 +573,43 @@ def add_product():
     # -----------------------------------------------------
     # ADD STOCK / UPDATE EXISTING PRODUCT
     # -----------------------------------------------------
+    #
+    # pallet_no can contain MULTIPLE pallet numbers separated by
+    # commas, spaces, and/or newlines (e.g. "1, 2, 5" or "1 2 5").
+    # The same product/boxes/date/movement is applied to each
+    # pallet listed. All pallets are updated in a single database
+    # transaction - if any one of them fails, none of them are
+    # applied.
+    # -----------------------------------------------------
 
     product_id = parse_positive_int(product_id_text)
     boxes = parse_positive_float(
         request.form.get("boxes", "")
     )
 
-    pallet_no = parse_positive_int(
-        request.form.get("pallet_no", "")
-    )
+    pallet_no_raw = request.form.get("pallet_no", "")
+
+    # Split on commas, spaces, and newlines, then de-duplicate
+    # while preserving the order the user typed them in.
+    pallet_no_tokens = [
+        token
+        for token in re.split(r"[,\s]+", pallet_no_raw.strip())
+        if token
+    ]
+
+    pallet_nos = []
+    for token in pallet_no_tokens:
+        parsed = parse_positive_int(token)
+
+        if parsed is None:
+            flash(
+                f"'{token}' is not a valid pallet number.",
+                "error"
+            )
+            return redirect(url_for("dashboard"))
+
+        if parsed not in pallet_nos:
+            pallet_nos.append(parsed)
 
     transaction_date = request.form.get(
         "transaction_date", ""
@@ -599,8 +628,11 @@ def add_product():
         flash("Quantity must be greater than zero.", "error")
         return redirect(url_for("dashboard"))
 
-    if pallet_no is None:
-        flash("Please enter a valid pallet number.", "error")
+    if not pallet_nos:
+        flash(
+            "Please enter at least one valid pallet number.",
+            "error"
+        )
         return redirect(url_for("dashboard"))
 
     if not valid_date(transaction_date):
@@ -624,101 +656,118 @@ def add_product():
             flash("Product not found.", "error")
             return redirect(url_for("dashboard"))
 
-        # Create the pallet on the fly if it doesn't exist yet -
-        # pallet numbers are no longer capped.
-        conn.execute("""
-            INSERT OR IGNORE INTO pallets (pallet_no)
-            VALUES (?)
-        """, (pallet_no,))
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        pallet = conn.execute("""
-            SELECT id, pallet_no
-            FROM pallets
-            WHERE pallet_no = ?
-        """, (pallet_no,)).fetchone()
+        for pallet_no in pallet_nos:
 
-        current = conn.execute("""
-            SELECT boxes
-            FROM stock
-            WHERE product_id = ?
-              AND pallet_id = ?
-        """, (
-            product_id,
-            pallet["id"]
-        )).fetchone()
-
-        current_boxes = (
-            current["boxes"]
-            if current
-            else 0
-        )
-
-        if movement_type == "Inward":
-            new_boxes = current_boxes + boxes
-
-        else:
-            if boxes > current_boxes:
-                flash(
-                    "Cannot remove more stock than is currently on this pallet.",
-                    "error"
-                )
-                return redirect(url_for("dashboard"))
-
-            new_boxes = current_boxes - boxes
-
-        # Remove zero-stock rows instead of keeping unnecessary rows.
-        if new_boxes == 0:
+            # Create the pallet on the fly if it doesn't exist yet -
+            # pallet numbers are no longer capped.
             conn.execute("""
-                DELETE FROM stock
+                INSERT OR IGNORE INTO pallets (pallet_no)
+                VALUES (?)
+            """, (pallet_no,))
+
+            pallet = conn.execute("""
+                SELECT id, pallet_no
+                FROM pallets
+                WHERE pallet_no = ?
+            """, (pallet_no,)).fetchone()
+
+            current = conn.execute("""
+                SELECT boxes
+                FROM stock
                 WHERE product_id = ?
                   AND pallet_id = ?
             """, (
                 product_id,
                 pallet["id"]
-            ))
-        else:
+            )).fetchone()
+
+            current_boxes = (
+                current["boxes"]
+                if current
+                else 0
+            )
+
+            if movement_type == "Inward":
+                new_boxes = current_boxes + boxes
+
+            else:
+                if boxes > current_boxes:
+                    conn.rollback()
+                    flash(
+                        f"Cannot remove more stock than is currently "
+                        f"on pallet P{pallet_no:02d}. No pallets in "
+                        f"this request were updated.",
+                        "error"
+                    )
+                    return redirect(url_for("dashboard"))
+
+                new_boxes = current_boxes - boxes
+
+            # Remove zero-stock rows instead of keeping unnecessary rows.
+            if new_boxes == 0:
+                conn.execute("""
+                    DELETE FROM stock
+                    WHERE product_id = ?
+                      AND pallet_id = ?
+                """, (
+                    product_id,
+                    pallet["id"]
+                ))
+            else:
+                conn.execute("""
+                    INSERT INTO stock (
+                        product_id,
+                        pallet_id,
+                        boxes
+                    )
+                    VALUES (?, ?, ?)
+
+                    ON CONFLICT(product_id, pallet_id)
+                    DO UPDATE SET
+                        boxes = excluded.boxes
+                """, (
+                    product_id,
+                    pallet["id"],
+                    new_boxes
+                ))
+
             conn.execute("""
-                INSERT INTO stock (
+                INSERT INTO transactions (
                     product_id,
                     pallet_id,
-                    boxes
+                    movement_type,
+                    boxes,
+                    created_at,
+                    transaction_date
                 )
-                VALUES (?, ?, ?)
-
-                ON CONFLICT(product_id, pallet_id)
-                DO UPDATE SET
-                    boxes = excluded.boxes
+                VALUES (?, ?, ?, ?, ?, ?)
             """, (
                 product_id,
                 pallet["id"],
-                new_boxes
-            ))
-
-        conn.execute("""
-            INSERT INTO transactions (
-                product_id,
-                pallet_id,
                 movement_type,
                 boxes,
                 created_at,
                 transaction_date
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (
-            product_id,
-            pallet["id"],
-            movement_type,
-            boxes,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            transaction_date
-        ))
+            ))
 
         conn.commit()
 
-        flash(
-            f"{movement_type} stock updated successfully.",
-            "success"
-        )
+        if len(pallet_nos) == 1:
+            flash(
+                f"{movement_type} stock updated successfully.",
+                "success"
+            )
+        else:
+            pallet_list = ", ".join(
+                f"P{no:02d}" for no in pallet_nos
+            )
+            flash(
+                f"{movement_type} stock updated on {len(pallet_nos)} "
+                f"pallets ({pallet_list}).",
+                "success"
+            )
 
         return redirect(url_for("dashboard"))
 

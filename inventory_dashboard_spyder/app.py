@@ -18,7 +18,11 @@ app.secret_key = os.environ.get(
 )
 
 DB_NAME = "inventory_boxes.db"
-MAX_PALLETS = 10
+
+# Number of pallets pre-created on first run, purely for convenience.
+# This is NOT a cap - pallets beyond this are created automatically
+# the first time they're used (see add_product).
+INITIAL_PALLETS = 10
 
 
 # =========================================================
@@ -90,7 +94,7 @@ def init_db():
     """)
 
     # Make sure P01-P10 exist.
-    for i in range(1, MAX_PALLETS + 1):
+    for i in range(1, INITIAL_PALLETS + 1):
         conn.execute("""
             INSERT OR IGNORE INTO pallets (pallet_no)
             VALUES (?)
@@ -595,11 +599,8 @@ def add_product():
         flash("Quantity must be greater than zero.", "error")
         return redirect(url_for("dashboard"))
 
-    if pallet_no is None or pallet_no > MAX_PALLETS:
-        flash(
-            f"Pallet must be between P01 and P{MAX_PALLETS:02d}.",
-            "error"
-        )
+    if pallet_no is None:
+        flash("Please enter a valid pallet number.", "error")
         return redirect(url_for("dashboard"))
 
     if not valid_date(transaction_date):
@@ -623,15 +624,18 @@ def add_product():
             flash("Product not found.", "error")
             return redirect(url_for("dashboard"))
 
+        # Create the pallet on the fly if it doesn't exist yet -
+        # pallet numbers are no longer capped.
+        conn.execute("""
+            INSERT OR IGNORE INTO pallets (pallet_no)
+            VALUES (?)
+        """, (pallet_no,))
+
         pallet = conn.execute("""
             SELECT id, pallet_no
             FROM pallets
             WHERE pallet_no = ?
         """, (pallet_no,)).fetchone()
-
-        if not pallet:
-            flash("Pallet not found.", "error")
-            return redirect(url_for("dashboard"))
 
         current = conn.execute("""
             SELECT boxes
@@ -804,7 +808,7 @@ def product(product_id):
 @app.route("/pallet/<int:pallet_no>")
 def pallet(pallet_no):
 
-    if pallet_no < 1 or pallet_no > MAX_PALLETS:
+    if pallet_no < 1:
         return "Pallet not found", 404
 
     conn = get_db()
@@ -894,7 +898,7 @@ def clear_pallet():
         request.form.get("pallet_no", "")
     )
 
-    if pallet_no is None or pallet_no > MAX_PALLETS:
+    if pallet_no is None:
         flash("Invalid pallet number.", "error")
         return redirect(url_for("dashboard"))
 

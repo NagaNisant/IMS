@@ -814,11 +814,12 @@ def product(product_id):
         pallets = conn.execute("""
             SELECT
                 pa.pallet_no,
-                COALESCE(s.boxes, 0) AS boxes
+                s.boxes AS boxes
             FROM pallets pa
-            LEFT JOIN stock s
+            JOIN stock s
                 ON pa.id = s.pallet_id
                 AND s.product_id = ?
+            WHERE s.boxes > 0
             ORDER BY pa.pallet_no
         """, (product_id,)).fetchall()
 

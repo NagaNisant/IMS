@@ -413,10 +413,70 @@
                 Goods Details
             </h2>
 
+            <p class="subtitle" style="margin-bottom: 15px;">
+                Pick a movement type and date to auto-fill the goods below
+                from that day's inventory activity, or add items manually.
+            </p>
+
+
+            <div class="grid" style="margin-bottom: 20px;">
+
+                <div class="field">
+
+                    <label>
+                        Movement Type
+                    </label>
+
+                    <select id="autofillMovementType">
+
+                        <option value="Inward">
+                            Inward
+                        </option>
+
+                        <option value="Outward">
+                            Outward
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <div class="field">
+
+                    <label>
+                        Date
+                    </label>
+
+                    <input
+                        type="date"
+                        id="autofillDate"
+                        value="{{ today }}"
+                    >
+
+                </div>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="add-item"
+                onclick="loadItemsForDate()"
+            >
+                ⟳ Auto-fill from Inventory
+            </button>
+
+            <span
+                id="autofillStatus"
+                style="margin-left: 12px; color: #6b7280; font-size: 14px;"
+            ></span>
+
 
             <table
                 class="items-table"
                 id="itemsTable"
+                style="margin-top: 20px;"
             >
 
                 <thead>
@@ -472,7 +532,7 @@
                 class="add-item"
                 onclick="addItem()"
             >
-                + Add Item
+                + Add Item Manually
             </button>
 
         </div>
@@ -512,7 +572,41 @@ const products = [
 ];
 
 
-function addItem() {
+function buildProductOptions(selectedId) {
+
+    let options =
+        '<option value="">Select Product</option>';
+
+
+    products.forEach(function(product) {
+
+        const selected =
+            (selectedId !== undefined && String(selectedId) === String(product.id))
+            ? " selected"
+            : "";
+
+        options +=
+
+            '<option value="' +
+            product.id +
+            '" data-weight="' +
+            product.weight +
+            '"' +
+            selected +
+            '>' +
+
+            product.name +
+
+            '</option>';
+
+    });
+
+    return options;
+
+}
+
+
+function addItem(prefill) {
 
     const tbody =
         document.getElementById(
@@ -526,25 +620,10 @@ function addItem() {
         );
 
 
-    let options =
-        '<option value="">Select Product</option>';
-
-
-    products.forEach(function(product) {
-
-        options +=
-
-            '<option value="' +
-            product.id +
-            '" data-weight="' +
-            product.weight +
-            '">' +
-
-            product.name +
-
-            '</option>';
-
-    });
+    const options =
+        buildProductOptions(
+            prefill ? prefill.product_id : undefined
+        );
 
 
     row.innerHTML = `
@@ -665,6 +744,14 @@ function addItem() {
 
     tbody.appendChild(row);
 
+
+    const select = row.querySelector('select[name="product_id[]"]');
+    updateWeight(select);
+
+    if (prefill && prefill.quantity !== undefined) {
+        row.querySelector('input[name="quantity[]"]').value = prefill.quantity;
+    }
+
 }
 
 
@@ -677,9 +764,9 @@ function updateWeight(select) {
 
 
     const weight =
-        option.getAttribute(
-            "data-weight"
-        );
+        option
+        ? option.getAttribute("data-weight")
+        : null;
 
 
     const row =
@@ -696,6 +783,74 @@ function updateWeight(select) {
         weight
         ? weight + " kg"
         : "";
+
+}
+
+
+async function loadItemsForDate() {
+
+    const movementType =
+        document.getElementById("autofillMovementType").value;
+
+    const dateValue =
+        document.getElementById("autofillDate").value;
+
+    const statusEl =
+        document.getElementById("autofillStatus");
+
+    if (!dateValue) {
+        statusEl.style.color = "#c0392b";
+        statusEl.textContent = "Please pick a date first.";
+        return;
+    }
+
+    statusEl.style.color = "#6b7280";
+    statusEl.textContent = "Loading...";
+
+    try {
+
+        const response = await fetch(
+            "/api/grn_items?date=" +
+            encodeURIComponent(dateValue) +
+            "&movement_type=" +
+            encodeURIComponent(movementType)
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            statusEl.style.color = "#c0392b";
+            statusEl.textContent = data.error || "Could not load items.";
+            return;
+        }
+
+        const tbody = document.getElementById("itemsBody");
+        tbody.innerHTML = "";
+
+        if (!data.items || data.items.length === 0) {
+            statusEl.style.color = "#c0392b";
+            statusEl.textContent =
+                "No " + movementType.toLowerCase() +
+                " activity found for that date. Add items manually instead.";
+            addItem();
+            return;
+        }
+
+        data.items.forEach(function(item) {
+            addItem(item);
+        });
+
+        statusEl.style.color = "#1e8449";
+        statusEl.textContent =
+            "Loaded " + data.items.length +
+            " item(s) for " + movementType.toLowerCase() +
+            " on " + dateValue +
+            ". You can still edit any field or add more items manually.";
+
+    } catch (err) {
+        statusEl.style.color = "#c0392b";
+        statusEl.textContent = "Something went wrong loading items.";
+    }
 
 }
 

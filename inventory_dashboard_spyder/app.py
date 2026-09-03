@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
 import sqlite3
 import re
 from datetime import datetime, date
@@ -1204,6 +1204,67 @@ def clear_all_data():
 
 
 # =========================================================
+# API - GOODS FOR A GIVEN DATE / MOVEMENT TYPE
+# =========================================================
+# Used by the Export (GRN) page to auto-fill the Goods Details
+# table when the user picks a date and Inward/Outward. Returns
+# one row per product, with the boxes summed across all pallets
+# for that date + movement type.
+
+@app.route("/api/grn_items")
+def api_grn_items():
+
+    item_date = request.args.get("date", "").strip()
+    movement_type = request.args.get("movement_type", "").strip()
+
+    if not valid_date(item_date):
+        return jsonify({
+            "error": "Please provide a valid date."
+        }), 400
+
+    if movement_type not in ("Inward", "Outward"):
+        return jsonify({
+            "error": "movement_type must be 'Inward' or 'Outward'."
+        }), 400
+
+    conn = get_db()
+
+    try:
+        rows = conn.execute("""
+            SELECT
+                p.id AS product_id,
+                p.name AS name,
+                p.box_weight AS weight,
+                SUM(t.boxes) AS quantity
+
+            FROM transactions t
+            JOIN products p
+                ON p.id = t.product_id
+
+            WHERE t.transaction_date = ?
+              AND t.movement_type = ?
+
+            GROUP BY p.id
+            ORDER BY p.name COLLATE NOCASE
+        """, (item_date, movement_type)).fetchall()
+
+        items = [
+            {
+                "product_id": row["product_id"],
+                "name": row["name"],
+                "weight": row["weight"],
+                "quantity": row["quantity"]
+            }
+            for row in rows
+        ]
+
+        return jsonify({"items": items})
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
 # EXPORT PAGE
 # =========================================================
 
@@ -1223,7 +1284,7 @@ def export_page():
         """).fetchall()
 
         return render_template(
-            "export.html",
+            "Export.html",
             products=products,
             today=date.today().strftime("%Y-%m-%d")
         )

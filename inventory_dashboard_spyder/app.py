@@ -177,8 +177,27 @@ def init_db():
         ("customer_id", "ALTER TABLE transactions ADD COLUMN customer_id INTEGER"),
         ("mfg_date", "ALTER TABLE transactions ADD COLUMN mfg_date TEXT"),
         ("expiry_date", "ALTER TABLE transactions ADD COLUMN expiry_date TEXT"),
+        ("unit_type", "ALTER TABLE transactions ADD COLUMN unit_type TEXT"),
+        ("unit_weight", "ALTER TABLE transactions ADD COLUMN unit_weight REAL"),
     ):
         if column not in existing_columns:
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
+
+    # Same migration, but for batches (unit_type / unit_weight
+    # weren't tracked per-lot until unit selection was added).
+    existing_batch_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(batches)").fetchall()
+    }
+
+    for column, ddl in (
+        ("unit_type", "ALTER TABLE batches ADD COLUMN unit_type TEXT"),
+        ("unit_weight", "ALTER TABLE batches ADD COLUMN unit_weight REAL"),
+    ):
+        if column not in existing_batch_columns:
             try:
                 conn.execute(ddl)
             except sqlite3.OperationalError:
@@ -766,114 +785,48 @@ def _read_excel_sheets(file_storage):
 # in place by name; new names are inserted.
 # =========================================================
 
-@app.route("/upload_products", methods=["POST"])
-def upload_products():
+def _parse_catalog_sheet(rows):
+    """
+    Given the raw rows of one Excel sheet, figure out which
+    columns hold the product name and box weight, and return
+    (name_col, weight_col, data_rows). Handles both a sheet with
+    a header row (Name / Box Weight, in any order) and a sheet
+    with no header at all (assumed to be Name, Box Weight).
+    """
+    if not rows:
+        return 0, 1, []
 
-    file = request.files.get("products_file")
-
-    if not file or not file.filename:
-        flash("Please choose an Excel file to upload.", "error")
-        return redirect(url_for("dashboard"))
-
-    header, rows = _read_excel_rows(file)
-
-    if header is None:
-        flash(
-            "Could not read that file. Please upload a valid .xlsx file.",
-            "error"
-        )
-        return redirect(url_for("dashboard"))
+    header = [
+        str(cell).strip().lower() if cell is not None else ""
+        for cell in rows[0]
+    ]
 
     name_col = _find_column(header, "name", "product", "product name")
-    weight_col = _find_column(
-        header, "box weight", "box_weight", "weight"
-    )
+    weight_col = _find_column(header, "box weight", "box_weight", "weight")
 
-    if name_col is None or weight_col is None:
-        flash(
-            "The Excel file needs a 'Name' column and a "
-            "'Box Weight' column.",
-            "error"
-        )
-        return redirect(url_for("dashboard"))
+    if name_col is not None and weight_col is not None:
+        return name_col, weight_col, rows[1:]
 
-    conn = get_db()
-    added = 0
-    skipped = 0
-
-    try:
-        for row in rows:
-
-            if not row or name_col >= len(row):
-                continue
-
-            raw_name = row[name_col]
-
-            if raw_name is None or not str(raw_name).strip():
-                continue
-
-            name = str(raw_name).strip()
-            box_weight = parse_positive_float(
-                row[weight_col] if weight_col < len(row) else None
-            )
-
-            if box_weight is None:
-                skipped += 1
-                continue
-
-            try:
-                conn.execute("""
-                    INSERT INTO products (name, box_weight)
-                    VALUES (?, ?)
-
-                    ON CONFLICT(name)
-                    DO UPDATE SET
-                        box_weight = excluded.box_weight
-                """, (name, box_weight))
-
-                added += 1
-
-            except sqlite3.Error:
-                skipped += 1
-
-        conn.commit()
-
-        message = f"Imported {added} product(s) from Excel."
-        if skipped:
-            message += f" Skipped {skipped} invalid row(s)."
-
-        flash(message, "success")
-        return redirect(url_for("dashboard"))
-
-    except sqlite3.Error:
-        conn.rollback()
-        flash("A database error occurred while importing products.", "error")
-        return redirect(url_for("dashboard"))
-
-    finally:
-        close_quietly(conn)
+    return 0, 1, rows
 
 
 # =========================================================
-# UPLOAD CUSTOMERS (EXCEL - ONE SHEET PER CUSTOMER)
+# UPLOAD CATALOG (EXCEL - ONE FILE, ONE SHEET PER CUSTOMER)
 # =========================================================
 #
-# Each SHEET TAB is a customer name. Inside that sheet, one
-# product name per row (an optional header row containing
-# "product"/"name"/"product name" is skipped automatically).
-#
-# For every product name found, the product must already exist
-# (upload it first via the Products file) - it's matched by
-# name, case-insensitively. Matched products are linked to that
-# customer in customer_products, which is what narrows the
-# Product dropdown on the Add Stock form once a customer is
-# selected.
+# A single .xlsx file where each SHEET TAB is a customer name.
+# Inside that sheet, each row is one product belonging to that
+# customer: Name, Box Weight (an optional header row is
+# detected automatically). Products are created/updated by name
+# and linked to that customer in customer_products - which is
+# what narrows the Product dropdown once a customer is selected
+# on the Add Stock form.
 # =========================================================
 
-@app.route("/upload_customers", methods=["POST"])
-def upload_customers():
+@app.route("/upload_catalog", methods=["POST"])
+def upload_catalog():
 
-    file = request.files.get("customers_file")
+    file = request.files.get("catalog_file")
 
     if not file or not file.filename:
         flash("Please choose an Excel file to upload.", "error")
@@ -892,20 +845,13 @@ def upload_customers():
         flash("That Excel file doesn't have any sheets.", "error")
         return redirect(url_for("dashboard"))
 
-    HEADER_WORDS = {"product", "name", "product name", "products"}
-
     conn = get_db()
     customers_added = 0
+    products_seen = 0
     links_added = 0
-    unmatched_products = set()
+    skipped = 0
 
     try:
-        # Case-insensitive lookup of existing products by name.
-        product_by_name = {
-            row["name"].strip().lower(): row["id"]
-            for row in conn.execute("SELECT id, name FROM products").fetchall()
-        }
-
         for sheet_title, rows in sheets:
 
             customer_name = str(sheet_title).strip()
@@ -918,32 +864,48 @@ def upload_customers():
                 VALUES (?)
             """, (customer_name,))
 
-            customers_added += 1
-
             customer_id = conn.execute("""
                 SELECT id FROM customers WHERE name = ?
             """, (customer_name,)).fetchone()["id"]
 
-            for row in rows:
+            customers_added += 1
 
-                if not row:
+            name_col, weight_col, data_rows = _parse_catalog_sheet(rows)
+
+            for row in data_rows:
+
+                if not row or name_col >= len(row):
                     continue
 
-                raw_name = row[0]
+                raw_name = row[name_col]
 
                 if raw_name is None or not str(raw_name).strip():
                     continue
 
                 product_name = str(raw_name).strip()
 
-                if product_name.lower() in HEADER_WORDS:
+                box_weight = parse_positive_float(
+                    row[weight_col] if weight_col < len(row) else None
+                )
+
+                if box_weight is None:
+                    skipped += 1
                     continue
 
-                product_id = product_by_name.get(product_name.lower())
+                conn.execute("""
+                    INSERT INTO products (name, box_weight)
+                    VALUES (?, ?)
 
-                if product_id is None:
-                    unmatched_products.add(product_name)
-                    continue
+                    ON CONFLICT(name)
+                    DO UPDATE SET
+                        box_weight = excluded.box_weight
+                """, (product_name, box_weight))
+
+                products_seen += 1
+
+                product_id = conn.execute("""
+                    SELECT id FROM products WHERE name = ?
+                """, (product_name,)).fetchone()["id"]
 
                 conn.execute("""
                     INSERT OR IGNORE INTO customer_products
@@ -956,19 +918,14 @@ def upload_customers():
         conn.commit()
 
         message = (
-            f"Imported {customers_added} customer sheet(s) and linked "
-            f"{links_added} product(s) to them."
+            f"Imported {customers_added} customer sheet(s), "
+            f"{products_seen} product row(s), and linked "
+            f"{links_added} product(s) to their customers."
         )
 
-        if unmatched_products:
-            preview = ", ".join(sorted(unmatched_products)[:5])
-            more = len(unmatched_products) - 5
-            if more > 0:
-                preview += f", and {more} more"
+        if skipped:
             message += (
-                f" Skipped product(s) not found in your catalogue: "
-                f"{preview}. Upload those via the Products file first, "
-                f"then re-upload this customers file."
+                f" Skipped {skipped} row(s) missing a valid box weight."
             )
 
         flash(message, "success")
@@ -976,7 +933,7 @@ def upload_customers():
 
     except sqlite3.Error:
         conn.rollback()
-        flash("A database error occurred while importing customers.", "error")
+        flash("A database error occurred while importing the catalog.", "error")
         return redirect(url_for("dashboard"))
 
     finally:
@@ -1183,6 +1140,11 @@ def add_product():
         request.form.get("customer_id", "")
     )
 
+    unit_type = request.form.get("unit_type", "").strip()
+    unit_weight = parse_positive_float(
+        request.form.get("unit_weight", "")
+    )
+
     mfg_date = request.form.get("mfg_date", "").strip()
     expiry_date = request.form.get("expiry_date", "").strip()
 
@@ -1211,6 +1173,14 @@ def add_product():
 
     if customer_id is None:
         flash("Please select a customer.", "error")
+        return redirect(url_for("dashboard"))
+
+    if unit_type not in ("Box", "Pack", "Unit"):
+        flash("Please select a unit type (Box, Pack, or Unit).", "error")
+        return redirect(url_for("dashboard"))
+
+    if unit_weight is None:
+        flash("Please enter a valid weight for the unit.", "error")
         return redirect(url_for("dashboard"))
 
     if movement_type == "Inward":
@@ -1304,10 +1274,12 @@ def add_product():
                         mfg_date,
                         expiry_date,
                         boxes,
+                        unit_type,
+                        unit_weight,
                         transaction_date,
                         created_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     product_id,
                     pallet["id"],
@@ -1315,6 +1287,8 @@ def add_product():
                     mfg_date,
                     expiry_date,
                     boxes,
+                    unit_type,
+                    unit_weight,
                     transaction_date,
                     created_at
                 ))
@@ -1417,9 +1391,11 @@ def add_product():
                     transaction_date,
                     customer_id,
                     mfg_date,
-                    expiry_date
+                    expiry_date,
+                    unit_type,
+                    unit_weight
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 product_id,
                 pallet["id"],
@@ -1429,7 +1405,9 @@ def add_product():
                 transaction_date,
                 customer_id,
                 mfg_date if movement_type == "Inward" else None,
-                txn_expiry_for_log
+                txn_expiry_for_log,
+                unit_type,
+                unit_weight
             ))
 
         conn.commit()

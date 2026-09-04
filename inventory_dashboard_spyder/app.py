@@ -112,6 +112,29 @@ def init_db():
         )
     """)
 
+    # Which products belong to which customer - independent of
+    # actual stock levels. Populated by uploading a customers
+    # Excel file where each SHEET is named after a customer and
+    # lists that customer's product names. This is what the Add
+    # Stock form uses to narrow the Product dropdown once a
+    # customer is picked.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS customer_products (
+            customer_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+
+            PRIMARY KEY (customer_id, product_id),
+
+            FOREIGN KEY (customer_id)
+                REFERENCES customers(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (product_id)
+                REFERENCES products(id)
+                ON DELETE CASCADE
+        )
+    """)
+
     # Batches track individual lots of stock with their own
     # manufacturing / expiry dates, so FIFO (nearest expiry first)
     # can be computed per product/pallet. "boxes" here is the
@@ -711,6 +734,29 @@ def _find_column(header, *names):
     return None
 
 
+def _read_excel_sheets(file_storage):
+    """
+    Load EVERY sheet of an uploaded .xlsx file. Returns a list of
+    (sheet_title, list_of_row_tuples), or None if the file can't
+    be read as an Excel workbook.
+    """
+    try:
+        workbook = openpyxl.load_workbook(
+            file_storage,
+            data_only=True,
+            read_only=True
+        )
+    except Exception:
+        return None
+
+    sheets = []
+    for sheet in workbook.worksheets:
+        rows = list(sheet.iter_rows(values_only=True))
+        sheets.append((sheet.title, rows))
+
+    return sheets
+
+
 # =========================================================
 # UPLOAD PRODUCTS (EXCEL)
 # =========================================================
@@ -809,11 +855,19 @@ def upload_products():
 
 
 # =========================================================
-# UPLOAD CUSTOMERS (EXCEL)
+# UPLOAD CUSTOMERS (EXCEL - ONE SHEET PER CUSTOMER)
 # =========================================================
 #
-# Expected column (case-insensitive): "name" (or "customer",
-# "customer name"). Duplicate names are ignored.
+# Each SHEET TAB is a customer name. Inside that sheet, one
+# product name per row (an optional header row containing
+# "product"/"name"/"product name" is skipped automatically).
+#
+# For every product name found, the product must already exist
+# (upload it first via the Products file) - it's matched by
+# name, case-insensitively. Matched products are linked to that
+# customer in customer_products, which is what narrows the
+# Product dropdown on the Add Stock form once a customer is
+# selected.
 # =========================================================
 
 @app.route("/upload_customers", methods=["POST"])
@@ -825,50 +879,99 @@ def upload_customers():
         flash("Please choose an Excel file to upload.", "error")
         return redirect(url_for("dashboard"))
 
-    header, rows = _read_excel_rows(file)
+    sheets = _read_excel_sheets(file)
 
-    if header is None:
+    if sheets is None:
         flash(
             "Could not read that file. Please upload a valid .xlsx file.",
             "error"
         )
         return redirect(url_for("dashboard"))
 
-    name_col = _find_column(header, "name", "customer", "customer name")
-
-    if name_col is None:
-        flash(
-            "The Excel file needs a 'Name' column.",
-            "error"
-        )
+    if not sheets:
+        flash("That Excel file doesn't have any sheets.", "error")
         return redirect(url_for("dashboard"))
 
+    HEADER_WORDS = {"product", "name", "product name", "products"}
+
     conn = get_db()
-    added = 0
+    customers_added = 0
+    links_added = 0
+    unmatched_products = set()
 
     try:
-        for row in rows:
+        # Case-insensitive lookup of existing products by name.
+        product_by_name = {
+            row["name"].strip().lower(): row["id"]
+            for row in conn.execute("SELECT id, name FROM products").fetchall()
+        }
 
-            if not row or name_col >= len(row):
+        for sheet_title, rows in sheets:
+
+            customer_name = str(sheet_title).strip()
+
+            if not customer_name:
                 continue
-
-            raw_name = row[name_col]
-
-            if raw_name is None or not str(raw_name).strip():
-                continue
-
-            name = str(raw_name).strip()
 
             conn.execute("""
                 INSERT OR IGNORE INTO customers (name)
                 VALUES (?)
-            """, (name,))
+            """, (customer_name,))
 
-            added += 1
+            customers_added += 1
+
+            customer_id = conn.execute("""
+                SELECT id FROM customers WHERE name = ?
+            """, (customer_name,)).fetchone()["id"]
+
+            for row in rows:
+
+                if not row:
+                    continue
+
+                raw_name = row[0]
+
+                if raw_name is None or not str(raw_name).strip():
+                    continue
+
+                product_name = str(raw_name).strip()
+
+                if product_name.lower() in HEADER_WORDS:
+                    continue
+
+                product_id = product_by_name.get(product_name.lower())
+
+                if product_id is None:
+                    unmatched_products.add(product_name)
+                    continue
+
+                conn.execute("""
+                    INSERT OR IGNORE INTO customer_products
+                        (customer_id, product_id)
+                    VALUES (?, ?)
+                """, (customer_id, product_id))
+
+                links_added += 1
 
         conn.commit()
 
-        flash(f"Imported {added} customer(s) from Excel.", "success")
+        message = (
+            f"Imported {customers_added} customer sheet(s) and linked "
+            f"{links_added} product(s) to them."
+        )
+
+        if unmatched_products:
+            preview = ", ".join(sorted(unmatched_products)[:5])
+            more = len(unmatched_products) - 5
+            if more > 0:
+                preview += f", and {more} more"
+            message += (
+                f" Skipped product(s) not found in your catalogue: "
+                f"{preview}. Upload those via the Products file first, "
+                f"then re-upload this customers file."
+            )
+
+        flash(message, "success")
         return redirect(url_for("dashboard"))
 
     except sqlite3.Error:
@@ -964,17 +1067,21 @@ def api_customer_products():
                 p.id,
                 p.name,
                 p.box_weight,
-                SUM(b.boxes) AS total_boxes
 
-            FROM batches b
+                COALESCE((
+                    SELECT SUM(b.boxes)
+                    FROM batches b
+                    WHERE b.product_id = p.id
+                      AND b.customer_id = cp.customer_id
+                      AND b.boxes > 0
+                ), 0) AS total_boxes
+
+            FROM customer_products cp
             JOIN products p
-                ON p.id = b.product_id
+                ON p.id = cp.product_id
 
-            WHERE b.customer_id = ?
-              AND b.boxes > 0
+            WHERE cp.customer_id = ?
 
-            GROUP BY p.id
-            HAVING total_boxes > 0
             ORDER BY p.name COLLATE NOCASE
         """, (customer_id,)).fetchall()
 
@@ -1700,12 +1807,25 @@ def customer(customer_id):
             ORDER BY name COLLATE NOCASE
         """).fetchall()
 
+        # Products linked to this customer via an uploaded customer
+        # sheet - this is what the Add Stock dropdown on this page
+        # is narrowed to (falls back to all_products if empty).
+        linked_products = conn.execute("""
+            SELECT p.id, p.name, p.box_weight
+            FROM customer_products cp
+            JOIN products p
+                ON p.id = cp.product_id
+            WHERE cp.customer_id = ?
+            ORDER BY p.name COLLATE NOCASE
+        """, (customer_id,)).fetchall()
+
         return render_template(
             "customer.html",
             customer=customer,
             products_summary=products_summary,
             batches=batches,
             all_products=all_products,
+            linked_products=linked_products,
             today=date.today().strftime("%Y-%m-%d")
         )
 

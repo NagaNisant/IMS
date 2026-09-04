@@ -321,6 +321,10 @@
                     Weight
                 </th>
 
+                <th>
+                    Nearest Expiry
+                </th>
+
             </tr>
 
         </thead>
@@ -362,6 +366,20 @@
                         )
                     }}
                     kg
+
+                </td>
+
+
+                <td>
+
+                    {% if pallet.nearest_expiry %}
+                        {{ pallet.nearest_expiry }}
+                        {% if loop.first %}
+                            <span style="color:#1e8449; font-weight:600;">(pick first)</span>
+                        {% endif %}
+                    {% else %}
+                        —
+                    {% endif %}
 
                 </td>
 
@@ -415,6 +433,14 @@
                     Weight
                 </th>
 
+                <th>
+                    Customer
+                </th>
+
+                <th>
+                    Mfg / Expiry
+                </th>
+
             </tr>
 
         </thead>
@@ -456,6 +482,20 @@
                     }}
                     kg
 
+                </td>
+
+
+                <td>
+                    {{ item.customer_name or "—" }}
+                </td>
+
+
+                <td>
+                    {% if item.mfg_date or item.expiry_date %}
+                        {{ item.mfg_date or "—" }} / {{ item.expiry_date or "—" }}
+                    {% else %}
+                        —
+                    {% endif %}
                 </td>
 
             </tr>

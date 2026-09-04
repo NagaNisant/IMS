@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+.section {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    max-width: 560px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.section h2 {
+    margin-top: 0;
+}
+
+.section p {
+    color: #777;
+}
+
+.period-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.period-tabs button {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.period-tabs button.active {
+    background: #17202a;
+    color: white;
+    border-color: #17202a;
+}
+
+.period-input {
+    margin-bottom: 20px;
+}
+
+.period-input label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.period-input input {
+    width: 100%;
+    height: 42px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    font-size: 14px;
+}
+
+.submit-btn {
+    padding: 12px 22px;
+    border: none;
+    border-radius: 8px;
+    background: #17202a;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    width: 100%;
+}
+
+</style>
+
+<h1>Export Stock to Excel</h1>
+
+<div class="section">
+
+    <h2>Choose a period</h2>
+    <p>
+        Downloads an .xlsx with one row per customer / product /
+        pallet: Customer Name, Product Name, Manufacturing Date,
+        Expiry Date, Quantity, Pallet Number.
+    </p>
+
+    <form
+        method="GET"
+        action="{{ url_for('export_excel_download') }}"
+        id="excelForm"
+    >
+
+        <input type="hidden" name="period_type" id="periodType" value="day">
+
+        <div class="period-tabs">
+            <button type="button" data-type="day" class="active" onclick="selectPeriod('day')">Day</button>
+            <button type="button" data-type="month" onclick="selectPeriod('month')">Month</button>
+            <button type="button" data-type="year" onclick="selectPeriod('year')">Year</button>
+        </div>
+
+        <div class="period-input" id="dayInput">
+            <label>Date</label>
+            <input type="date" name="period_value_day" value="{{ today }}">
+        </div>
+
+        <div class="period-input" id="monthInput" style="display:none;">
+            <label>Month</label>
+            <input type="month" name="period_value_month" value="{{ this_month }}">
+        </div>
+
+        <div class="period-input" id="yearInput" style="display:none;">
+            <label>Year</label>
+            <input type="number" name="period_value_year" value="{{ this_year }}" min="2000" max="2100">
+        </div>
+
+        <button type="submit" class="submit-btn">Download Excel</button>
+
+    </form>
+
+</div>
+
+<script>
+
+function selectPeriod(type) {
+    document.getElementById("periodType").value = type;
+
+    document.querySelectorAll(".period-tabs button").forEach(function(btn) {
+        btn.classList.toggle("active", btn.getAttribute("data-type") === type);
+    });
+
+    document.getElementById("dayInput").style.display = type === "day" ? "" : "none";
+    document.getElementById("monthInput").style.display = type === "month" ? "" : "none";
+    document.getElementById("yearInput").style.display = type === "year" ? "" : "none";
+}
+
+document.getElementById("excelForm").addEventListener("submit", function(e) {
+    const type = document.getElementById("periodType").value;
+
+    // Only the active period's input should be sent as period_value.
+    const valueMap = {
+        day: document.querySelector('input[name="period_value_day"]').value,
+        month: document.querySelector('input[name="period_value_month"]').value,
+        year: document.querySelector('input[name="period_value_year"]').value
+    };
+
+    let hidden = document.getElementById("periodValueHidden");
+    if (!hidden) {
+        hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = "period_value";
+        hidden.id = "periodValueHidden";
+        this.appendChild(hidden);
+    }
+    hidden.value = valueMap[type];
+});
+
+</script>
+
+{% endblock %}

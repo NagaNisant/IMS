@@ -4,6 +4,7 @@ import re
 from datetime import datetime, date
 from io import BytesIO
 import os
+import openpyxl
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -93,6 +94,62 @@ def init_db():
                 ON DELETE CASCADE
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS customers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE
+        )
+    """)
+
+    # Batches track individual lots of stock with their own
+    # manufacturing / expiry dates, so FIFO (nearest expiry first)
+    # can be computed per product/pallet. "boxes" here is the
+    # amount of this specific batch still remaining (it goes down
+    # as Outward movements consume it).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS batches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            pallet_id INTEGER NOT NULL,
+            customer_id INTEGER,
+            mfg_date TEXT,
+            expiry_date TEXT,
+            boxes REAL NOT NULL DEFAULT 0 CHECK (boxes >= 0),
+            transaction_date TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+
+            FOREIGN KEY (product_id)
+                REFERENCES products(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (pallet_id)
+                REFERENCES pallets(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (customer_id)
+                REFERENCES customers(id)
+                ON DELETE SET NULL
+        )
+    """)
+
+    # Migrate older databases that predate the customer / expiry
+    # tracking columns on transactions. Safe to run every startup.
+    existing_columns = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(transactions)").fetchall()
+    }
+
+    for column, ddl in (
+        ("customer_id", "ALTER TABLE transactions ADD COLUMN customer_id INTEGER"),
+        ("mfg_date", "ALTER TABLE transactions ADD COLUMN mfg_date TEXT"),
+        ("expiry_date", "ALTER TABLE transactions ADD COLUMN expiry_date TEXT"),
+    ):
+        if column not in existing_columns:
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
 
     # Make sure P01-P10 exist.
     for i in range(1, INITIAL_PALLETS + 1):
@@ -185,6 +242,12 @@ def dashboard():
         all_products = conn.execute("""
             SELECT id, name, box_weight
             FROM products
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+        all_customers = conn.execute("""
+            SELECT id, name
+            FROM customers
             ORDER BY name COLLATE NOCASE
         """).fetchall()
 
@@ -462,6 +525,7 @@ def dashboard():
             "dashboard.html",
             products=products,
             all_products=all_products,
+            all_customers=all_customers,
             pallets=pallets,
             total_stock=total_stock,
             total_boxes=total_boxes,
@@ -472,6 +536,267 @@ def dashboard():
             display_date=display_date,
             today=date.today().strftime("%Y-%m-%d")
         )
+
+    finally:
+        close_quietly(conn)
+
+
+def _read_excel_rows(file_storage):
+    """
+    Load the first sheet of an uploaded .xlsx file and return
+    (header_list, data_rows). Returns (None, None) if the file
+    can't be read as an Excel workbook.
+    """
+    try:
+        workbook = openpyxl.load_workbook(
+            file_storage,
+            data_only=True,
+            read_only=True
+        )
+        sheet = workbook.active
+        rows = list(sheet.iter_rows(values_only=True))
+    except Exception:
+        return None, None
+
+    if not rows:
+        return [], []
+
+    header = [
+        str(cell).strip().lower() if cell is not None else ""
+        for cell in rows[0]
+    ]
+
+    return header, rows[1:]
+
+
+def _find_column(header, *names):
+    for name in names:
+        if name in header:
+            return header.index(name)
+    return None
+
+
+# =========================================================
+# UPLOAD PRODUCTS (EXCEL)
+# =========================================================
+#
+# Expected columns (case-insensitive): "name" and
+# "box weight" (or "weight"). Existing products are updated
+# in place by name; new names are inserted.
+# =========================================================
+
+@app.route("/upload_products", methods=["POST"])
+def upload_products():
+
+    file = request.files.get("products_file")
+
+    if not file or not file.filename:
+        flash("Please choose an Excel file to upload.", "error")
+        return redirect(url_for("dashboard"))
+
+    header, rows = _read_excel_rows(file)
+
+    if header is None:
+        flash(
+            "Could not read that file. Please upload a valid .xlsx file.",
+            "error"
+        )
+        return redirect(url_for("dashboard"))
+
+    name_col = _find_column(header, "name", "product", "product name")
+    weight_col = _find_column(
+        header, "box weight", "box_weight", "weight"
+    )
+
+    if name_col is None or weight_col is None:
+        flash(
+            "The Excel file needs a 'Name' column and a "
+            "'Box Weight' column.",
+            "error"
+        )
+        return redirect(url_for("dashboard"))
+
+    conn = get_db()
+    added = 0
+    skipped = 0
+
+    try:
+        for row in rows:
+
+            if not row or name_col >= len(row):
+                continue
+
+            raw_name = row[name_col]
+
+            if raw_name is None or not str(raw_name).strip():
+                continue
+
+            name = str(raw_name).strip()
+            box_weight = parse_positive_float(
+                row[weight_col] if weight_col < len(row) else None
+            )
+
+            if box_weight is None:
+                skipped += 1
+                continue
+
+            try:
+                conn.execute("""
+                    INSERT INTO products (name, box_weight)
+                    VALUES (?, ?)
+
+                    ON CONFLICT(name)
+                    DO UPDATE SET
+                        box_weight = excluded.box_weight
+                """, (name, box_weight))
+
+                added += 1
+
+            except sqlite3.Error:
+                skipped += 1
+
+        conn.commit()
+
+        message = f"Imported {added} product(s) from Excel."
+        if skipped:
+            message += f" Skipped {skipped} invalid row(s)."
+
+        flash(message, "success")
+        return redirect(url_for("dashboard"))
+
+    except sqlite3.Error:
+        conn.rollback()
+        flash("A database error occurred while importing products.", "error")
+        return redirect(url_for("dashboard"))
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
+# UPLOAD CUSTOMERS (EXCEL)
+# =========================================================
+#
+# Expected column (case-insensitive): "name" (or "customer",
+# "customer name"). Duplicate names are ignored.
+# =========================================================
+
+@app.route("/upload_customers", methods=["POST"])
+def upload_customers():
+
+    file = request.files.get("customers_file")
+
+    if not file or not file.filename:
+        flash("Please choose an Excel file to upload.", "error")
+        return redirect(url_for("dashboard"))
+
+    header, rows = _read_excel_rows(file)
+
+    if header is None:
+        flash(
+            "Could not read that file. Please upload a valid .xlsx file.",
+            "error"
+        )
+        return redirect(url_for("dashboard"))
+
+    name_col = _find_column(header, "name", "customer", "customer name")
+
+    if name_col is None:
+        flash(
+            "The Excel file needs a 'Name' column.",
+            "error"
+        )
+        return redirect(url_for("dashboard"))
+
+    conn = get_db()
+    added = 0
+
+    try:
+        for row in rows:
+
+            if not row or name_col >= len(row):
+                continue
+
+            raw_name = row[name_col]
+
+            if raw_name is None or not str(raw_name).strip():
+                continue
+
+            name = str(raw_name).strip()
+
+            conn.execute("""
+                INSERT OR IGNORE INTO customers (name)
+                VALUES (?)
+            """, (name,))
+
+            added += 1
+
+        conn.commit()
+
+        flash(f"Imported {added} customer(s) from Excel.", "success")
+        return redirect(url_for("dashboard"))
+
+    except sqlite3.Error:
+        conn.rollback()
+        flash("A database error occurred while importing customers.", "error")
+        return redirect(url_for("dashboard"))
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
+# API - PALLETS BY EXPIRY (FIFO)
+# =========================================================
+#
+# Given a product, returns every pallet currently holding stock
+# of that product, sorted so the pallet with the nearest expiry
+# date comes first - i.e. the pallet that should be picked next
+# under FIFO (First In, First Out).
+# =========================================================
+
+@app.route("/api/pallets_by_expiry")
+def api_pallets_by_expiry():
+
+    product_id = parse_positive_int(request.args.get("product_id", ""))
+
+    if product_id is None:
+        return jsonify({"error": "Invalid product."}), 400
+
+    conn = get_db()
+
+    try:
+        rows = conn.execute("""
+            SELECT
+                pa.pallet_no,
+                MIN(b.expiry_date) AS nearest_expiry,
+                SUM(b.boxes) AS total_boxes
+
+            FROM batches b
+            JOIN pallets pa
+                ON pa.id = b.pallet_id
+
+            WHERE b.product_id = ?
+              AND b.boxes > 0
+
+            GROUP BY pa.id
+            HAVING total_boxes > 0
+            ORDER BY
+                (nearest_expiry IS NULL),
+                nearest_expiry ASC,
+                pa.pallet_no ASC
+        """, (product_id,)).fetchall()
+
+        pallets = [
+            {
+                "pallet_no": row["pallet_no"],
+                "nearest_expiry": row["nearest_expiry"],
+                "total_boxes": row["total_boxes"]
+            }
+            for row in rows
+        ]
+
+        return jsonify({"pallets": pallets})
 
     finally:
         close_quietly(conn)
@@ -496,79 +821,7 @@ def dashboard():
 @app.route("/add_product", methods=["POST"])
 def add_product():
 
-    mode = request.form.get("product_mode", "").strip()
-
-    name = request.form.get("name", "").strip()
     product_id_text = request.form.get("product_id", "").strip()
-    box_weight_text = request.form.get("box_weight", "").strip()
-
-    # -----------------------------------------------------
-    # CREATE PRODUCT
-    # -----------------------------------------------------
-    #
-    # DO NOT validate stock fields here.
-    #
-
-    if mode == "create":
-
-        if not name:
-            flash("Enter a product name.", "error")
-            return redirect(url_for("dashboard"))
-
-        box_weight = parse_positive_float(box_weight_text)
-
-        if box_weight is None:
-            flash("Enter a valid weight per box greater than zero.", "error")
-            return redirect(url_for("dashboard"))
-
-        conn = get_db()
-
-        try:
-            existing = conn.execute("""
-                SELECT id
-                FROM products
-                WHERE LOWER(name) = LOWER(?)
-            """, (name,)).fetchone()
-
-            if existing:
-                flash(
-                    "Product already exists. Select the existing product.",
-                    "error"
-                )
-                return redirect(url_for("dashboard"))
-
-            conn.execute("""
-                INSERT INTO products (name, box_weight)
-                VALUES (?, ?)
-            """, (name, box_weight))
-
-            conn.commit()
-
-            flash(
-                f"Product '{name}' created successfully.",
-                "success"
-            )
-
-            return redirect(url_for("dashboard"))
-
-        except sqlite3.IntegrityError:
-            conn.rollback()
-            flash(
-                "Could not create the product. A product with this name may already exist.",
-                "error"
-            )
-            return redirect(url_for("dashboard"))
-
-        except sqlite3.Error:
-            conn.rollback()
-            flash(
-                "A database error occurred while creating the product.",
-                "error"
-            )
-            return redirect(url_for("dashboard"))
-
-        finally:
-            close_quietly(conn)
 
     # -----------------------------------------------------
     # ADD STOCK / UPDATE EXISTING PRODUCT
@@ -580,6 +833,13 @@ def add_product():
     # pallet listed. All pallets are updated in a single database
     # transaction - if any one of them fails, none of them are
     # applied.
+    #
+    # Inward movements create a new batch (with its own
+    # manufacturing / expiry date) on each pallet listed.
+    #
+    # Outward movements consume existing batches FIFO - the
+    # batch with the nearest expiry date on that pallet is drawn
+    # down first.
     # -----------------------------------------------------
 
     product_id = parse_positive_int(product_id_text)
@@ -620,6 +880,13 @@ def add_product():
         "Inward"
     ).strip()
 
+    customer_id = parse_positive_int(
+        request.form.get("customer_id", "")
+    )
+
+    mfg_date = request.form.get("mfg_date", "").strip()
+    expiry_date = request.form.get("expiry_date", "").strip()
+
     if product_id is None:
         flash("Please select a product.", "error")
         return redirect(url_for("dashboard"))
@@ -643,6 +910,30 @@ def add_product():
         flash("Invalid movement type.", "error")
         return redirect(url_for("dashboard"))
 
+    if customer_id is None:
+        flash("Please select a customer.", "error")
+        return redirect(url_for("dashboard"))
+
+    if movement_type == "Inward":
+
+        if not valid_date(mfg_date):
+            flash(
+                "Please enter a valid manufacturing date.",
+                "error"
+            )
+            return redirect(url_for("dashboard"))
+
+        if not valid_date(expiry_date):
+            flash("Please enter a valid expiry date.", "error")
+            return redirect(url_for("dashboard"))
+
+        if expiry_date < mfg_date:
+            flash(
+                "Expiry date can't be before the manufacturing date.",
+                "error"
+            )
+            return redirect(url_for("dashboard"))
+
     conn = get_db()
 
     try:
@@ -654,6 +945,16 @@ def add_product():
 
         if not product:
             flash("Product not found.", "error")
+            return redirect(url_for("dashboard"))
+
+        customer = conn.execute("""
+            SELECT id, name
+            FROM customers
+            WHERE id = ?
+        """, (customer_id,)).fetchone()
+
+        if not customer:
+            flash("Customer not found.", "error")
             return redirect(url_for("dashboard"))
 
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -689,8 +990,37 @@ def add_product():
                 else 0
             )
 
+            txn_expiry_for_log = None
+
             if movement_type == "Inward":
                 new_boxes = current_boxes + boxes
+
+                # Record this lot as its own batch so FIFO can
+                # find it later by expiry date.
+                conn.execute("""
+                    INSERT INTO batches (
+                        product_id,
+                        pallet_id,
+                        customer_id,
+                        mfg_date,
+                        expiry_date,
+                        boxes,
+                        transaction_date,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    product_id,
+                    pallet["id"],
+                    customer_id,
+                    mfg_date,
+                    expiry_date,
+                    boxes,
+                    transaction_date,
+                    created_at
+                ))
+
+                txn_expiry_for_log = expiry_date
 
             else:
                 if boxes > current_boxes:
@@ -704,6 +1034,51 @@ def add_product():
                     return redirect(url_for("dashboard"))
 
                 new_boxes = current_boxes - boxes
+
+                # FIFO: consume from the batch(es) on this pallet
+                # with the nearest expiry date first.
+                remaining_to_remove = boxes
+
+                open_batches = conn.execute("""
+                    SELECT id, boxes, expiry_date
+                    FROM batches
+                    WHERE product_id = ?
+                      AND pallet_id = ?
+                      AND boxes > 0
+                    ORDER BY
+                        (expiry_date IS NULL),
+                        expiry_date ASC,
+                        id ASC
+                """, (
+                    product_id,
+                    pallet["id"]
+                )).fetchall()
+
+                earliest_expiry_consumed = None
+
+                for batch in open_batches:
+
+                    if remaining_to_remove <= 0:
+                        break
+
+                    take = min(batch["boxes"], remaining_to_remove)
+
+                    conn.execute("""
+                        UPDATE batches
+                        SET boxes = boxes - ?
+                        WHERE id = ?
+                    """, (take, batch["id"]))
+
+                    remaining_to_remove -= take
+
+                    if earliest_expiry_consumed is None:
+                        earliest_expiry_consumed = batch["expiry_date"]
+
+                # If historical stock predates batch tracking, the
+                # pallet's stock total can still be reduced even
+                # when there isn't enough batch detail behind it.
+
+                txn_expiry_for_log = earliest_expiry_consumed
 
             # Remove zero-stock rows instead of keeping unnecessary rows.
             if new_boxes == 0:
@@ -740,16 +1115,22 @@ def add_product():
                     movement_type,
                     boxes,
                     created_at,
-                    transaction_date
+                    transaction_date,
+                    customer_id,
+                    mfg_date,
+                    expiry_date
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 product_id,
                 pallet["id"],
                 movement_type,
                 boxes,
                 created_at,
-                transaction_date
+                transaction_date,
+                customer_id,
+                mfg_date if movement_type == "Inward" else None,
+                txn_expiry_for_log
             ))
 
         conn.commit()
@@ -814,13 +1195,23 @@ def product(product_id):
         pallets = conn.execute("""
             SELECT
                 pa.pallet_no,
-                s.boxes AS boxes
+                s.boxes AS boxes,
+                (
+                    SELECT MIN(b.expiry_date)
+                    FROM batches b
+                    WHERE b.product_id = s.product_id
+                      AND b.pallet_id = s.pallet_id
+                      AND b.boxes > 0
+                ) AS nearest_expiry
             FROM pallets pa
             JOIN stock s
                 ON pa.id = s.pallet_id
                 AND s.product_id = ?
             WHERE s.boxes > 0
-            ORDER BY pa.pallet_no
+            ORDER BY
+                (nearest_expiry IS NULL),
+                nearest_expiry ASC,
+                pa.pallet_no
         """, (product_id,)).fetchall()
 
         total_boxes = sum(
@@ -837,10 +1228,15 @@ def product(product_id):
                 t.boxes,
                 t.created_at,
                 t.transaction_date,
-                pa.pallet_no
+                t.mfg_date,
+                t.expiry_date,
+                pa.pallet_no,
+                c.name AS customer_name
             FROM transactions t
             JOIN pallets pa
                 ON pa.id = t.pallet_id
+            LEFT JOIN customers c
+                ON c.id = t.customer_id
             WHERE t.product_id = ?
             ORDER BY
                 t.transaction_date DESC,
@@ -912,6 +1308,12 @@ def product(product_id):
                 ORDER BY t.id DESC
             """, (product_id, selected_date)).fetchall()
 
+        all_customers = conn.execute("""
+            SELECT id, name
+            FROM customers
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
         return render_template(
             "product.html",
             product=product,
@@ -924,7 +1326,9 @@ def product(product_id):
             date_total_weight=date_total_weight,
             total_boxes=total_boxes,
             total_weight=total_weight,
-            history=history
+            history=history,
+            all_customers=all_customers,
+            today=date.today().strftime("%Y-%m-%d")
         )
 
     finally:
@@ -959,7 +1363,14 @@ def pallet(pallet_no):
                 p.name,
                 p.box_weight,
                 s.boxes,
-                s.boxes * p.box_weight AS weight
+                s.boxes * p.box_weight AS weight,
+                (
+                    SELECT MIN(b.expiry_date)
+                    FROM batches b
+                    WHERE b.product_id = p.id
+                      AND b.pallet_id = s.pallet_id
+                      AND b.boxes > 0
+                ) AS nearest_expiry
             FROM stock s
             JOIN products p
                 ON p.id = s.product_id

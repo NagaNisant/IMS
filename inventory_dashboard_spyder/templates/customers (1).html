@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<style>
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+}
+
+.customer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 18px;
+}
+
+.customer-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    text-decoration: none;
+    color: #222;
+    display: block;
+}
+
+.customer-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.customer-card h3 {
+    margin: 0 0 10px;
+}
+
+.customer-card .stat {
+    color: #777;
+    font-size: 14px;
+}
+
+.empty-state {
+    background: white;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    color: #777;
+}
+
+</style>
+
+<div class="page-header">
+    <h1>Customers</h1>
+</div>
+
+{% if customers %}
+
+<div class="customer-grid">
+
+    {% for c in customers %}
+
+    <a class="customer-card" href="{{ url_for('customer', customer_id=c.id) }}">
+        <h3>{{ c.name }}</h3>
+        <div class="stat">{{ c.product_count }} product(s) in stock</div>
+        <div class="stat">{{ "%.2f"|format(c.total_boxes) }} boxes total</div>
+    </a>
+
+    {% endfor %}
+
+</div>
+
+{% else %}
+
+<div class="empty-state">
+    No customers yet. Add customers from
+    <a href="{{ url_for('manage_data') }}">Manage Data</a>.
+</div>
+
+{% endif %}
+
+{% endblock %}

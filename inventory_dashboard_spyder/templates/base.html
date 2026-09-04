@@ -245,10 +245,33 @@
 
 
                 <a
+                    href="{{ url_for('customers') }}"
+                >
+                    👤 Customers
+                </a>
+
+
+                <a
+                    href="{{ url_for('export_excel_page') }}"
+                >
+                    📊 Excel Export
+                </a>
+
+
+                <a
                     href="{{ url_for('manage_data') }}"
                 >
                     🗄️ Manage Data
                 </a>
+
+
+                {% if session.get('username') %}
+                <a
+                    href="{{ url_for('logout') }}"
+                >
+                    🚪 Logout ({{ session.get('username') }})
+                </a>
+                {% endif %}
 
             </div>
 

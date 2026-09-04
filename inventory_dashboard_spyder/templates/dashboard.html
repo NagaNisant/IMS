@@ -449,41 +449,13 @@
             <div class="form-group">
 
                 <label>
-                    Product
-                </label>
-
-                <select
-                    name="product_id"
-                    id="stockProductSelect"
-                    onchange="loadFifoSuggestions()"
-                    required
-                >
-
-                    <option value="">
-                        Select Product
-                    </option>
-
-                    {% for product in all_products %}
-
-                    <option value="{{ product.id }}">
-                        {{ product.name }}
-                    </option>
-
-                    {% endfor %}
-
-                </select>
-
-            </div>
-
-
-            <div class="form-group">
-
-                <label>
                     Customer
                 </label>
 
                 <select
                     name="customer_id"
+                    id="stockCustomerSelect"
+                    onchange="loadCustomerProducts()"
                     required
                 >
 
@@ -507,13 +479,41 @@
             <div class="form-group">
 
                 <label>
+                    Product
+                </label>
+
+                <select
+                    name="product_id"
+                    id="stockProductSelect"
+                    onchange="loadFifoSuggestions()"
+                    required
+                    disabled
+                >
+
+                    <option value="">
+                        Select Customer First
+                    </option>
+
+                </select>
+
+                <small
+                    id="productHint"
+                    style="color:#777;"
+                ></small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
                     Movement
                 </label>
 
                 <select
                     name="movement_type"
                     id="stockMovementType"
-                    onchange="toggleBatchFields()"
+                    onchange="toggleBatchFields(); loadCustomerProducts();"
                     required
                 >
 
@@ -650,6 +650,75 @@
 
 
 <script>
+
+const ALL_PRODUCTS = [
+{% for product in all_products %}
+    { id: "{{ product.id }}", name: "{{ product.name|replace('"', '\\"') }}" },
+{% endfor %}
+];
+
+function setProductOptions(products, placeholder) {
+
+    const select = document.getElementById("stockProductSelect");
+    const previousValue = select.value;
+
+    let html = '<option value="">' + placeholder + '</option>';
+
+    products.forEach(function(p) {
+        html += '<option value="' + p.id + '">' + p.name + '</option>';
+    });
+
+    select.innerHTML = html;
+    select.disabled = products.length === 0;
+
+    // Keep the previous selection if it's still a valid option.
+    if (products.some(function(p) { return String(p.id) === previousValue; })) {
+        select.value = previousValue;
+    }
+}
+
+async function loadCustomerProducts() {
+
+    const customerId = document.getElementById("stockCustomerSelect").value;
+    const movement = document.getElementById("stockMovementType").value;
+    const hint = document.getElementById("productHint");
+
+    if (!customerId) {
+        setProductOptions([], "Select Customer First");
+        hint.textContent = "";
+        return;
+    }
+
+    if (movement === "Inward") {
+        // New stock coming in - any product in the catalogue is valid.
+        setProductOptions(ALL_PRODUCTS, "Select Product");
+        hint.textContent = "Showing all products.";
+        return;
+    }
+
+    // Outward - only offer products this customer actually has stock in.
+    hint.textContent = "Loading this customer's products...";
+
+    try {
+        const response = await fetch(
+            "/api/customer_products?customer_id=" + encodeURIComponent(customerId)
+        );
+        const data = await response.json();
+
+        if (!data.products || data.products.length === 0) {
+            setProductOptions([], "No stock for this customer");
+            hint.textContent = "This customer has no stock to remove.";
+            return;
+        }
+
+        setProductOptions(data.products, "Select Product");
+        hint.textContent = "Showing only products this customer holds.";
+
+    } catch (err) {
+        setProductOptions(ALL_PRODUCTS, "Select Product");
+        hint.textContent = "Could not filter by customer - showing all products.";
+    }
+}
 
 function toggleBatchFields() {
 

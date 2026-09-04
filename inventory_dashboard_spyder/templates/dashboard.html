@@ -348,88 +348,40 @@
 </div>
 
 
-<!-- IMPORT PRODUCTS / CUSTOMERS -->
+<!-- IMPORT CATALOG -->
 
 <div class="section">
 
-    <h2>Import Products &amp; Customers</h2>
+    <h2>Import Customers &amp; Products</h2>
 
     <p style="color:#777; margin-top:-10px;">
-        Products and customers are managed by uploading an Excel (.xlsx)
-        file — there's no manual "add product" form anymore. Re-uploading
-        updates existing entries by name and adds any new ones.
+        Upload a single Excel (.xlsx) file — there's no manual "add
+        product" form anymore. Each <strong>sheet tab</strong> in the
+        file is treated as one customer's name, and every row inside
+        that sheet is one of their products (columns:
+        <strong>Name</strong>, <strong>Box Weight</strong>).
+        Re-uploading updates existing entries and adds new ones.
     </p>
 
-    <div class="form-grid">
+    <form
+        action="{{ url_for('upload_catalog') }}"
+        method="POST"
+        enctype="multipart/form-data"
+        style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"
+    >
 
-        <div class="form-group">
+        <input
+            type="file"
+            name="catalog_file"
+            accept=".xlsx"
+            required
+        >
 
-            <label>
-                Products File
-            </label>
+        <button type="submit" class="primary-btn">
+            Upload
+        </button>
 
-            <form
-                action="{{ url_for('upload_products') }}"
-                method="POST"
-                enctype="multipart/form-data"
-                style="display:flex; gap:10px; align-items:center;"
-            >
-
-                <input
-                    type="file"
-                    name="products_file"
-                    accept=".xlsx"
-                    required
-                >
-
-                <button type="submit" class="primary-btn">
-                    Upload
-                </button>
-
-            </form>
-
-            <small style="color:#777;">
-                Columns: <strong>Name</strong>, <strong>Box Weight</strong>
-            </small>
-
-        </div>
-
-
-        <div class="form-group">
-
-            <label>
-                Customers File
-            </label>
-
-            <form
-                action="{{ url_for('upload_customers') }}"
-                method="POST"
-                enctype="multipart/form-data"
-                style="display:flex; gap:10px; align-items:center;"
-            >
-
-                <input
-                    type="file"
-                    name="customers_file"
-                    accept=".xlsx"
-                    required
-                >
-
-                <button type="submit" class="primary-btn">
-                    Upload
-                </button>
-
-            </form>
-
-            <small style="color:#777;">
-                One <strong>sheet per customer</strong> - the sheet's tab
-                name is the customer name, and each row is one of their
-                product names (must already exist in Products).
-            </small>
-
-        </div>
-
-    </div>
+    </form>
 
 </div>
 
@@ -487,7 +439,7 @@
                 <select
                     name="product_id"
                     id="stockProductSelect"
-                    onchange="loadFifoSuggestions()"
+                    onchange="loadFifoSuggestions(); fillUnitWeightFromProduct();"
                     required
                     disabled
                 >
@@ -535,7 +487,61 @@
             <div class="form-group">
 
                 <label>
-                    Quantity (Boxes)
+                    Unit Type
+                </label>
+
+                <select
+                    name="unit_type"
+                    id="unitTypeSelect"
+                    required
+                >
+
+                    <option value="Box">
+                        Box
+                    </option>
+
+                    <option value="Pack">
+                        Pack
+                    </option>
+
+                    <option value="Unit">
+                        Unit
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Weight of Unit
+                </label>
+
+                <input
+                    type="number"
+                    name="unit_weight"
+                    id="unitWeightInput"
+                    step="0.01"
+                    min="0.01"
+                    placeholder="e.g. 4.5"
+                    required
+                >
+
+                <small style="color:#777;">
+                    Pre-filled from the product's box weight when
+                    available — edit freely if this unit weighs
+                    something different.
+                </small>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
+                    Quantity of Unit
                 </label>
 
                 <input
@@ -655,9 +661,23 @@
 
 const ALL_PRODUCTS = [
 {% for product in all_products %}
-    { id: "{{ product.id }}", name: "{{ product.name|replace('"', '\\"') }}" },
+    { id: "{{ product.id }}", name: "{{ product.name|replace('"', '\\"') }}", box_weight: "{{ product.box_weight }}" },
 {% endfor %}
 ];
+
+let PRODUCT_WEIGHTS = {};
+ALL_PRODUCTS.forEach(function(p) { PRODUCT_WEIGHTS[String(p.id)] = p.box_weight; });
+
+function fillUnitWeightFromProduct() {
+
+    const productId = document.getElementById("stockProductSelect").value;
+    const weightInput = document.getElementById("unitWeightInput");
+
+    if (productId && PRODUCT_WEIGHTS[productId]) {
+        weightInput.value = PRODUCT_WEIGHTS[productId];
+    }
+
+}
 
 function setProductOptions(products, placeholder) {
 
@@ -667,6 +687,11 @@ function setProductOptions(products, placeholder) {
     let html = '<option value="">' + placeholder + '</option>';
 
     products.forEach(function(p) {
+        // Keep the weight lookup current for products that only
+        // came back from the customer-filtered API call.
+        if (p.box_weight !== undefined) {
+            PRODUCT_WEIGHTS[String(p.id)] = p.box_weight;
+        }
         html += '<option value="' + p.id + '">' + p.name + '</option>';
     });
 

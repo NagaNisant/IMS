@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Login - IMS</title>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f5f7;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 380px;
+            background: white;
+            border-radius: 14px;
+            padding: 36px 32px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+
+        .login-card h1 {
+            margin: 0 0 6px;
+            font-size: 24px;
+            letter-spacing: 1px;
+        }
+
+        .login-card p {
+            margin: 0 0 24px;
+            color: #777;
+        }
+
+        .field {
+            margin-bottom: 16px;
+        }
+
+        .field label {
+            display: block;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+
+        .field input {
+            width: 100%;
+            height: 44px;
+            padding: 0 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+
+        .submit {
+            width: 100%;
+            height: 46px;
+            border: none;
+            border-radius: 8px;
+            background: #17202a;
+            color: white;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+
+        .submit:hover {
+            opacity: 0.9;
+        }
+
+        .flash {
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            border-radius: 8px;
+            background: #fdecea;
+            border: 1px solid #f5c2be;
+            color: #922b21;
+            font-size: 14px;
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+    <div class="login-card">
+
+        <h1>IMS</h1>
+        <p>Sign in to continue</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="flash">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}">
+
+            <input type="hidden" name="next" value="{{ next }}">
+
+            <div class="field">
+                <label>Username</label>
+                <input
+                    type="text"
+                    name="username"
+                    autofocus
+                    required
+                >
+            </div>
+
+            <div class="field">
+                <label>Password</label>
+                <input
+                    type="password"
+                    name="password"
+                    required
+                >
+            </div>
+
+            <button type="submit" class="submit">Sign In</button>
+
+        </form>
+
+    </div>
+
+</body>
+
+</html>

@@ -1,10 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, session
+from functools import wraps
 import sqlite3
 import re
+import calendar
 from datetime import datetime, date
 from io import BytesIO
 import os
 import openpyxl
+from openpyxl.styles import Font
+from werkzeug.security import generate_password_hash, check_password_hash
 
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -20,6 +24,12 @@ app.secret_key = os.environ.get(
 )
 
 DB_NAME = "inventory_boxes.db"
+
+# Default login created the first time the app runs. Change this
+# (or set DEFAULT_ADMIN_USERNAME / DEFAULT_ADMIN_PASSWORD env vars
+# before first run) once you've logged in.
+DEFAULT_ADMIN_USERNAME = os.environ.get("DEFAULT_ADMIN_USERNAME", "admin")
+DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "admin123")
 
 # Number of pallets pre-created on first run, purely for convenience.
 # This is NOT a cap - pallets beyond this are created automatically
@@ -158,6 +168,30 @@ def init_db():
             VALUES (?)
         """, (i,))
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL
+        )
+    """)
+
+    # Seed a default login on first run only, so the app is never
+    # left completely unprotected. Change the password after
+    # logging in (or delete the row and re-run to reseed).
+    existing_user = conn.execute(
+        "SELECT id FROM users LIMIT 1"
+    ).fetchone()
+
+    if not existing_user:
+        conn.execute("""
+            INSERT INTO users (username, password_hash)
+            VALUES (?, ?)
+        """, (
+            DEFAULT_ADMIN_USERNAME,
+            generate_password_hash(DEFAULT_ADMIN_PASSWORD)
+        ))
+
     conn.commit()
     conn.close()
 
@@ -212,6 +246,42 @@ def valid_date(value):
         return False
 
 
+def period_range(period_type, period_value):
+    """
+    Turn a (period_type, period_value) pair into an inclusive
+    (start_date, end_date) range of "YYYY-MM-DD" strings, or
+    return None if the input isn't valid.
+
+    period_type: "day" | "month" | "year"
+    period_value:
+        day   -> "YYYY-MM-DD"
+        month -> "YYYY-MM"
+        year  -> "YYYY"
+    """
+    try:
+        if period_type == "day":
+            d = datetime.strptime(period_value, "%Y-%m-%d").date()
+            return d.isoformat(), d.isoformat()
+
+        if period_type == "month":
+            d = datetime.strptime(period_value, "%Y-%m").date()
+            last_day = calendar.monthrange(d.year, d.month)[1]
+            start = d.replace(day=1)
+            end = d.replace(day=last_day)
+            return start.isoformat(), end.isoformat()
+
+        if period_type == "year":
+            year = int(period_value)
+            start = date(year, 1, 1)
+            end = date(year, 12, 31)
+            return start.isoformat(), end.isoformat()
+
+    except (TypeError, ValueError):
+        return None
+
+    return None
+
+
 def get_transaction_dates():
     conn = get_db()
     try:
@@ -225,6 +295,71 @@ def get_transaction_dates():
         return [row["transaction_date"] for row in rows]
     finally:
         close_quietly(conn)
+
+
+# =========================================================
+# AUTH
+# =========================================================
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+@app.before_request
+def require_login():
+    # Anything not explicitly allowed needs a logged-in session.
+    open_endpoints = {"login", "static"}
+
+    if request.endpoint in open_endpoints:
+        return None
+
+    if not session.get("user_id"):
+        return redirect(url_for("login", next=request.path))
+
+    return None
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        conn = get_db()
+        try:
+            user = conn.execute("""
+                SELECT id, username, password_hash
+                FROM users
+                WHERE username = ?
+            """, (username,)).fetchone()
+        finally:
+            close_quietly(conn)
+
+        if user and check_password_hash(user["password_hash"], password):
+            session.clear()
+            session["user_id"] = user["id"]
+            session["username"] = user["username"]
+
+            next_url = request.form.get("next") or url_for("dashboard")
+            return redirect(next_url)
+
+        flash("Invalid username or password.", "error")
+
+    return render_template(
+        "login.html",
+        next=request.args.get("next", "")
+    )
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 # =========================================================
@@ -797,6 +932,63 @@ def api_pallets_by_expiry():
         ]
 
         return jsonify({"pallets": pallets})
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
+# API - PRODUCTS FOR A CUSTOMER
+# =========================================================
+#
+# Given a customer, returns the products they currently hold
+# stock of (id, name, box_weight, total_boxes). Used by the Add
+# Stock form so picking a customer can filter/prioritise the
+# Product dropdown - e.g. Outward should only offer products
+# that customer actually has.
+# =========================================================
+
+@app.route("/api/customer_products")
+def api_customer_products():
+
+    customer_id = parse_positive_int(request.args.get("customer_id", ""))
+
+    if customer_id is None:
+        return jsonify({"error": "Invalid customer."}), 400
+
+    conn = get_db()
+
+    try:
+        rows = conn.execute("""
+            SELECT
+                p.id,
+                p.name,
+                p.box_weight,
+                SUM(b.boxes) AS total_boxes
+
+            FROM batches b
+            JOIN products p
+                ON p.id = b.product_id
+
+            WHERE b.customer_id = ?
+              AND b.boxes > 0
+
+            GROUP BY p.id
+            HAVING total_boxes > 0
+            ORDER BY p.name COLLATE NOCASE
+        """, (customer_id,)).fetchall()
+
+        products = [
+            {
+                "id": row["id"],
+                "name": row["name"],
+                "box_weight": row["box_weight"],
+                "total_boxes": row["total_boxes"]
+            }
+            for row in rows
+        ]
+
+        return jsonify({"products": products})
 
     finally:
         close_quietly(conn)
@@ -1399,6 +1591,129 @@ def pallet(pallet_no):
         close_quietly(conn)
 
 # =========================================================
+# CUSTOMERS
+# =========================================================
+
+@app.route("/customers")
+def customers():
+
+    conn = get_db()
+
+    try:
+        customers = conn.execute("""
+            SELECT
+                c.id,
+                c.name,
+
+                COUNT(DISTINCT b.product_id) AS product_count,
+
+                COALESCE(
+                    SUM(
+                        CASE WHEN b.boxes > 0 THEN b.boxes ELSE 0 END
+                    ), 0
+                ) AS total_boxes
+
+            FROM customers c
+            LEFT JOIN batches b
+                ON b.customer_id = c.id
+                AND b.boxes > 0
+
+            GROUP BY c.id
+            ORDER BY c.name COLLATE NOCASE
+        """).fetchall()
+
+        return render_template(
+            "customers.html",
+            customers=customers
+        )
+
+    finally:
+        close_quietly(conn)
+
+
+@app.route("/customer/<int:customer_id>")
+def customer(customer_id):
+
+    conn = get_db()
+
+    try:
+        customer = conn.execute("""
+            SELECT id, name
+            FROM customers
+            WHERE id = ?
+        """, (customer_id,)).fetchone()
+
+        if not customer:
+            return "Customer not found", 404
+
+        # One row per open batch this customer has stock in -
+        # i.e. the products they hold, broken down by pallet,
+        # manufacturing date and expiry date.
+        batches = conn.execute("""
+            SELECT
+                p.id AS product_id,
+                p.name AS product_name,
+                p.box_weight,
+                pa.pallet_no,
+                b.mfg_date,
+                b.expiry_date,
+                b.boxes
+
+            FROM batches b
+            JOIN products p
+                ON p.id = b.product_id
+            JOIN pallets pa
+                ON pa.id = b.pallet_id
+
+            WHERE b.customer_id = ?
+              AND b.boxes > 0
+
+            ORDER BY
+                p.name COLLATE NOCASE,
+                (b.expiry_date IS NULL),
+                b.expiry_date ASC,
+                pa.pallet_no
+        """, (customer_id,)).fetchall()
+
+        # Also group by product for a quick summary at the top -
+        # "under the customer name, a list of the products they have".
+        products_summary = {}
+        for row in batches:
+            key = row["product_id"]
+            if key not in products_summary:
+                products_summary[key] = {
+                    "product_id": row["product_id"],
+                    "product_name": row["product_name"],
+                    "box_weight": row["box_weight"],
+                    "total_boxes": 0
+                }
+            products_summary[key]["total_boxes"] += row["boxes"]
+
+        products_summary = sorted(
+            products_summary.values(),
+            key=lambda item: item["product_name"].lower()
+        )
+
+        all_products = conn.execute("""
+            SELECT id, name, box_weight
+            FROM products
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+        return render_template(
+            "customer.html",
+            customer=customer,
+            products_summary=products_summary,
+            batches=batches,
+            all_products=all_products,
+            today=date.today().strftime("%Y-%m-%d")
+        )
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
 # MANAGE DATA PAGE
 # =========================================================
 
@@ -1702,6 +2017,121 @@ def export_page():
 
     finally:
         close_quietly(conn)
+
+
+# =========================================================
+# EXCEL STOCK EXPORT (day / month / year)
+# =========================================================
+
+@app.route("/export_excel")
+def export_excel_page():
+    return render_template(
+        "export_excel.html",
+        today=date.today().strftime("%Y-%m-%d"),
+        this_month=date.today().strftime("%Y-%m"),
+        this_year=date.today().strftime("%Y")
+    )
+
+
+@app.route("/export_excel/download")
+def export_excel_download():
+
+    period_type = request.args.get("period_type", "").strip()
+    period_value = request.args.get("period_value", "").strip()
+
+    if period_type not in ("day", "month", "year"):
+        flash("Please choose a valid period.", "error")
+        return redirect(url_for("export_excel_page"))
+
+    date_range = period_range(period_type, period_value)
+
+    if date_range is None:
+        flash("Please choose a valid date.", "error")
+        return redirect(url_for("export_excel_page"))
+
+    start_date, end_date = date_range
+
+    conn = get_db()
+
+    try:
+        # Stock received within the chosen period that is still on
+        # hand (boxes > 0), one row per batch/pallet - this is the
+        # "total stock for a day / month / year" the customer holds.
+        rows = conn.execute("""
+            SELECT
+                COALESCE(c.name, 'Unassigned') AS customer_name,
+                p.name AS product_name,
+                b.mfg_date,
+                b.expiry_date,
+                b.boxes AS quantity,
+                pa.pallet_no
+
+            FROM batches b
+            JOIN products p
+                ON p.id = b.product_id
+            JOIN pallets pa
+                ON pa.id = b.pallet_id
+            LEFT JOIN customers c
+                ON c.id = b.customer_id
+
+            WHERE b.boxes > 0
+              AND b.transaction_date BETWEEN ? AND ?
+
+            ORDER BY
+                customer_name COLLATE NOCASE,
+                p.name COLLATE NOCASE,
+                pa.pallet_no
+        """, (start_date, end_date)).fetchall()
+
+    finally:
+        close_quietly(conn)
+
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Stock"
+
+    headers = [
+        "Customer Name",
+        "Product Name",
+        "Manufacturing Date",
+        "Expiry Date",
+        "Quantity",
+        "Pallet Number",
+    ]
+
+    sheet.append(headers)
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+
+    for row in rows:
+        sheet.append([
+            row["customer_name"],
+            row["product_name"],
+            format_date(row["mfg_date"]),
+            format_date(row["expiry_date"]),
+            row["quantity"],
+            f"P{row['pallet_no']:02d}",
+        ])
+
+    for column_cells in sheet.columns:
+        length = max(
+            len(str(cell.value)) if cell.value is not None else 0
+            for cell in column_cells
+        )
+        sheet.column_dimensions[column_cells[0].column_letter].width = max(12, length + 2)
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+
+    filename = f"stock_export_{period_type}_{period_value}.xlsx"
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 
 # =========================================================

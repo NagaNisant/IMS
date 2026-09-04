@@ -422,7 +422,9 @@
             </form>
 
             <small style="color:#777;">
-                Column: <strong>Name</strong>
+                One <strong>sheet per customer</strong> - the sheet's tab
+                name is the customer name, and each row is one of their
+                product names (must already exist in Products).
             </small>
 
         </div>
@@ -680,7 +682,6 @@ function setProductOptions(products, placeholder) {
 async function loadCustomerProducts() {
 
     const customerId = document.getElementById("stockCustomerSelect").value;
-    const movement = document.getElementById("stockMovementType").value;
     const hint = document.getElementById("productHint");
 
     if (!customerId) {
@@ -689,14 +690,6 @@ async function loadCustomerProducts() {
         return;
     }
 
-    if (movement === "Inward") {
-        // New stock coming in - any product in the catalogue is valid.
-        setProductOptions(ALL_PRODUCTS, "Select Product");
-        hint.textContent = "Showing all products.";
-        return;
-    }
-
-    // Outward - only offer products this customer actually has stock in.
     hint.textContent = "Loading this customer's products...";
 
     try {
@@ -706,13 +699,16 @@ async function loadCustomerProducts() {
         const data = await response.json();
 
         if (!data.products || data.products.length === 0) {
-            setProductOptions([], "No stock for this customer");
-            hint.textContent = "This customer has no stock to remove.";
+            // No sheet has been uploaded for this customer yet -
+            // fall back to the full catalogue rather than a dead end.
+            setProductOptions(ALL_PRODUCTS, "Select Product");
+            hint.textContent =
+                "No products linked to this customer yet - showing all products.";
             return;
         }
 
         setProductOptions(data.products, "Select Product");
-        hint.textContent = "Showing only products this customer holds.";
+        hint.textContent = "Showing only products linked to this customer.";
 
     } catch (err) {
         setProductOptions(ALL_PRODUCTS, "Select Product");

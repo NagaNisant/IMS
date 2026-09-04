@@ -348,66 +348,86 @@
 </div>
 
 
-<!-- ADD PRODUCT -->
+<!-- IMPORT PRODUCTS / CUSTOMERS -->
 
 <div class="section">
 
-    <h2>Add New Product</h2>
+    <h2>Import Products &amp; Customers</h2>
 
-    <form
-        action="{{ url_for('add_product') }}"
-        method="POST"
-    >
+    <p style="color:#777; margin-top:-10px;">
+        Products and customers are managed by uploading an Excel (.xlsx)
+        file — there's no manual "add product" form anymore. Re-uploading
+        updates existing entries by name and adds any new ones.
+    </p>
 
-        <input type="hidden" name="product_mode" value="create">
+    <div class="form-grid">
 
-        <div class="form-grid">
+        <div class="form-group">
 
-            <div class="form-group">
+            <label>
+                Products File
+            </label>
 
-                <label>
-                    Product Name
-                </label>
+            <form
+                action="{{ url_for('upload_products') }}"
+                method="POST"
+                enctype="multipart/form-data"
+                style="display:flex; gap:10px; align-items:center;"
+            >
 
                 <input
-                    type="text"
-                    name="name"
+                    type="file"
+                    name="products_file"
+                    accept=".xlsx"
                     required
                 >
 
-            </div>
-
-
-            <div class="form-group">
-
-                <label>
-                    Box Weight
-                </label>
-
-                <input
-                    type="number"
-                    step="0.01"
-                    name="box_weight"
-                    required
-                >
-
-            </div>
-
-
-            <div class="form-full">
-
-                <button
-                    type="submit"
-                    class="primary-btn"
-                >
-                    Add Product
+                <button type="submit" class="primary-btn">
+                    Upload
                 </button>
 
-            </div>
+            </form>
+
+            <small style="color:#777;">
+                Columns: <strong>Name</strong>, <strong>Box Weight</strong>
+            </small>
 
         </div>
 
-    </form>
+
+        <div class="form-group">
+
+            <label>
+                Customers File
+            </label>
+
+            <form
+                action="{{ url_for('upload_customers') }}"
+                method="POST"
+                enctype="multipart/form-data"
+                style="display:flex; gap:10px; align-items:center;"
+            >
+
+                <input
+                    type="file"
+                    name="customers_file"
+                    accept=".xlsx"
+                    required
+                >
+
+                <button type="submit" class="primary-btn">
+                    Upload
+                </button>
+
+            </form>
+
+            <small style="color:#777;">
+                Column: <strong>Name</strong>
+            </small>
+
+        </div>
+
+    </div>
 
 </div>
 
@@ -421,6 +441,7 @@
     <form
         action="{{ url_for('add_product') }}"
         method="POST"
+        id="addStockForm"
     >
 
         <div class="form-grid">
@@ -433,6 +454,8 @@
 
                 <select
                     name="product_id"
+                    id="stockProductSelect"
+                    onchange="loadFifoSuggestions()"
                     required
                 >
 
@@ -456,11 +479,41 @@
             <div class="form-group">
 
                 <label>
+                    Customer
+                </label>
+
+                <select
+                    name="customer_id"
+                    required
+                >
+
+                    <option value="">
+                        Select Customer
+                    </option>
+
+                    {% for customer in all_customers %}
+
+                    <option value="{{ customer.id }}">
+                        {{ customer.name }}
+                    </option>
+
+                    {% endfor %}
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label>
                     Movement
                 </label>
 
                 <select
                     name="movement_type"
+                    id="stockMovementType"
+                    onchange="toggleBatchFields()"
                     required
                 >
 
@@ -510,6 +563,38 @@
             </div>
 
 
+            <div class="form-group" id="mfgDateGroup">
+
+                <label>
+                    Manufacturing Date
+                </label>
+
+                <input
+                    type="date"
+                    name="mfg_date"
+                    id="mfgDateInput"
+                    required
+                >
+
+            </div>
+
+
+            <div class="form-group" id="expiryDateGroup">
+
+                <label>
+                    Expiry Date
+                </label>
+
+                <input
+                    type="date"
+                    name="expiry_date"
+                    id="expiryDateInput"
+                    required
+                >
+
+            </div>
+
+
             <div class="form-group form-full">
 
                 <label>
@@ -519,13 +604,29 @@
                 <input
                     type="text"
                     name="pallet_no"
+                    id="palletNoInput"
                     placeholder="e.g. 1, 2, 5  (enter one or more, separated by commas)"
                     required
                 >
 
                 <small style="color:#777;">
-                    Enter multiple pallet numbers separated by commas to add the same stock to all of them at once.
+                    Enter multiple pallet numbers separated by commas to add
+                    the same stock to all of them at once. You can always
+                    type pallet numbers manually instead of using a suggestion below.
                 </small>
+
+            </div>
+
+
+            <div class="form-full" id="fifoSuggestions" style="display:none;">
+
+                <div style="background:#f5f5f5; border-radius:8px; padding:14px 16px;">
+
+                    <strong>FIFO pick order (closest expiry first):</strong>
+
+                    <div id="fifoList" style="margin-top:8px;"></div>
+
+                </div>
 
             </div>
 
@@ -548,6 +649,106 @@
 </div>
 
 
+<script>
+
+function toggleBatchFields() {
+
+    const movement =
+        document.getElementById("stockMovementType").value;
+
+    const mfgGroup = document.getElementById("mfgDateGroup");
+    const expiryGroup = document.getElementById("expiryDateGroup");
+    const mfgInput = document.getElementById("mfgDateInput");
+    const expiryInput = document.getElementById("expiryDateInput");
+
+    if (movement === "Inward") {
+        mfgGroup.style.display = "";
+        expiryGroup.style.display = "";
+        mfgInput.required = true;
+        expiryInput.required = true;
+
+    } else {
+        mfgGroup.style.display = "none";
+        expiryGroup.style.display = "none";
+        mfgInput.required = false;
+        expiryInput.required = false;
+    }
+
+}
+
+
+async function loadFifoSuggestions() {
+
+    const productId =
+        document.getElementById("stockProductSelect").value;
+
+    const container = document.getElementById("fifoSuggestions");
+    const list = document.getElementById("fifoList");
+
+    if (!productId) {
+        container.style.display = "none";
+        return;
+    }
+
+    try {
+
+        const response = await fetch(
+            "/api/pallets_by_expiry?product_id=" +
+            encodeURIComponent(productId)
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || !data.pallets || data.pallets.length === 0) {
+            container.style.display = "none";
+            return;
+        }
+
+        list.innerHTML = "";
+
+        data.pallets.forEach(function(p, index) {
+
+            const row = document.createElement("div");
+            row.style.padding = "4px 0";
+
+            const expiryText =
+                p.nearest_expiry ? p.nearest_expiry : "no expiry on record";
+
+            row.innerHTML =
+                '<button type="button" style="border:none; background:none; ' +
+                'color:#222; text-decoration:underline; cursor:pointer; padding:0;" ' +
+                'onclick="usePallet(' + p.pallet_no + ')">' +
+                'Pallet P' + String(p.pallet_no).padStart(2, "0") +
+                '</button>' +
+                ' — expires ' + expiryText +
+                ' — ' + p.total_boxes + ' boxes available' +
+                (index === 0 ? '  <em>(pick this one first)</em>' : '');
+
+            list.appendChild(row);
+
+        });
+
+        container.style.display = "";
+
+        // Pre-fill (but don't lock) the pallet field with the
+        // pallet that has the nearest expiry date.
+        const palletInput = document.getElementById("palletNoInput");
+        if (!palletInput.value.trim()) {
+            palletInput.value = data.pallets[0].pallet_no;
+        }
+
+    } catch (err) {
+        container.style.display = "none";
+    }
+
+}
+
+
+toggleBatchFields();
+
+</script>
+
+
 <!-- PRODUCTS -->
 
 <div class="section">
@@ -557,6 +758,7 @@
     <div class="table-wrapper">
 
         <table class="data-table">
+
 
             <thead>
 

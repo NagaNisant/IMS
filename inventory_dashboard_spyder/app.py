@@ -55,9 +55,36 @@ def init_db():
         CREATE TABLE IF NOT EXISTS products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL UNIQUE,
-            box_weight REAL NOT NULL CHECK (box_weight > 0)
+            box_weight REAL
         )
     """)
+
+    # Older databases created box_weight as NOT NULL CHECK (> 0),
+    # back when Box Weight was a required column in the Excel
+    # upload. It's now optional, so rebuild the table without that
+    # constraint if it's still present. Safe to run every startup.
+    products_table_sql = conn.execute("""
+        SELECT sql FROM sqlite_master
+        WHERE type = 'table' AND name = 'products'
+    """).fetchone()
+
+    if products_table_sql and "NOT NULL" in products_table_sql["sql"]:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("""
+            CREATE TABLE products_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                box_weight REAL
+            )
+        """)
+        conn.execute("""
+            INSERT INTO products_new (id, name, box_weight)
+            SELECT id, name, box_weight FROM products
+        """)
+        conn.execute("DROP TABLE products")
+        conn.execute("ALTER TABLE products_new RENAME TO products")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS pallets (
@@ -595,7 +622,11 @@ def dashboard():
                     "name": p["name"],
                     "box_weight": p["box_weight"],
                     "total_boxes": boxes,
-                    "total_weight": boxes * p["box_weight"],
+                    "total_weight": (
+                        boxes * p["box_weight"]
+                        if p["box_weight"] is not None
+                        else None
+                    ),
                     "pallet_count": 0
                 })
 
@@ -780,21 +811,22 @@ def _read_excel_sheets(file_storage):
 # UPLOAD PRODUCTS (EXCEL)
 # =========================================================
 #
-# Expected columns (case-insensitive): "name" and
-# "box weight" (or "weight"). Existing products are updated
-# in place by name; new names are inserted.
+# Expected column (case-insensitive): "name". "box weight" (or
+# "weight") is optional - if present it's used, if absent the
+# product is still created/linked with no catalog weight on file.
 # =========================================================
 
 def _parse_catalog_sheet(rows):
     """
     Given the raw rows of one Excel sheet, figure out which
-    columns hold the product name and box weight, and return
-    (name_col, weight_col, data_rows). Handles both a sheet with
-    a header row (Name / Box Weight, in any order) and a sheet
-    with no header at all (assumed to be Name, Box Weight).
+    columns hold the product name and (optionally) box weight,
+    and return (name_col, weight_col, data_rows). weight_col may
+    be None if there's no weight column at all. Handles both a
+    sheet with a header row and a sheet with no header at all
+    (assumed to be Name in column A).
     """
     if not rows:
-        return 0, 1, []
+        return 0, None, []
 
     header = [
         str(cell).strip().lower() if cell is not None else ""
@@ -804,10 +836,10 @@ def _parse_catalog_sheet(rows):
     name_col = _find_column(header, "name", "product", "product name")
     weight_col = _find_column(header, "box weight", "box_weight", "weight")
 
-    if name_col is not None and weight_col is not None:
+    if name_col is not None:
         return name_col, weight_col, rows[1:]
 
-    return 0, 1, rows
+    return 0, (1 if weight_col is None else weight_col), rows
 
 
 # =========================================================
@@ -816,11 +848,12 @@ def _parse_catalog_sheet(rows):
 #
 # A single .xlsx file where each SHEET TAB is a customer name.
 # Inside that sheet, each row is one product belonging to that
-# customer: Name, Box Weight (an optional header row is
-# detected automatically). Products are created/updated by name
-# and linked to that customer in customer_products - which is
-# what narrows the Product dropdown once a customer is selected
-# on the Add Stock form.
+# customer: just a Name column is required - Box Weight is
+# optional (an optional header row is detected automatically).
+# Products are created/updated by name and linked to that
+# customer in customer_products - which is what narrows the
+# Product dropdown once a customer is selected on the Add Stock
+# form.
 # =========================================================
 
 @app.route("/upload_catalog", methods=["POST"])
@@ -849,7 +882,6 @@ def upload_catalog():
     customers_added = 0
     products_seen = 0
     links_added = 0
-    skipped = 0
 
     try:
         for sheet_title, rows in sheets:
@@ -884,22 +916,26 @@ def upload_catalog():
 
                 product_name = str(raw_name).strip()
 
-                box_weight = parse_positive_float(
-                    row[weight_col] if weight_col < len(row) else None
-                )
+                box_weight = None
+                if weight_col is not None and weight_col < len(row):
+                    box_weight = parse_positive_float(row[weight_col])
 
-                if box_weight is None:
-                    skipped += 1
-                    continue
+                if box_weight is not None:
+                    conn.execute("""
+                        INSERT INTO products (name, box_weight)
+                        VALUES (?, ?)
 
-                conn.execute("""
-                    INSERT INTO products (name, box_weight)
-                    VALUES (?, ?)
-
-                    ON CONFLICT(name)
-                    DO UPDATE SET
-                        box_weight = excluded.box_weight
-                """, (product_name, box_weight))
+                        ON CONFLICT(name)
+                        DO UPDATE SET
+                            box_weight = excluded.box_weight
+                    """, (product_name, box_weight))
+                else:
+                    # No weight supplied - create the product if it's
+                    # new, but don't overwrite an existing weight.
+                    conn.execute("""
+                        INSERT OR IGNORE INTO products (name, box_weight)
+                        VALUES (?, NULL)
+                    """, (product_name,))
 
                 products_seen += 1
 
@@ -922,11 +958,6 @@ def upload_catalog():
             f"{products_seen} product row(s), and linked "
             f"{links_added} product(s) to their customers."
         )
-
-        if skipped:
-            message += (
-                f" Skipped {skipped} row(s) missing a valid box weight."
-            )
 
         flash(message, "success")
         return redirect(url_for("dashboard"))
@@ -1497,6 +1528,8 @@ def product(product_id):
 
         total_weight = (
             total_boxes * product["box_weight"]
+            if product["box_weight"] is not None
+            else None
         )
 
         history = conn.execute("""
@@ -1569,6 +1602,8 @@ def product(product_id):
 
             date_total_weight = (
                 date_total_boxes * product["box_weight"]
+                if product["box_weight"] is not None
+                else None
             )
 
             date_transactions = conn.execute("""
@@ -1661,7 +1696,7 @@ def pallet(pallet_no):
         )
 
         total_weight = sum(
-            p["weight"] for p in products
+            p["weight"] for p in products if p["weight"] is not None
         )
 
         return render_template(
@@ -2578,11 +2613,15 @@ def generate_grn():
                 return redirect(url_for("export_page"))
 
             weight_per_box = product["box_weight"]
-            net_weight = quantity * weight_per_box
+            net_weight = (
+                quantity * weight_per_box
+                if weight_per_box is not None
+                else 0
+            )
 
             items.append({
                 "description": product["name"],
-                "weight": weight_per_box,
+                "weight": weight_per_box if weight_per_box is not None else 0,
                 "batch": (
                     batches[i]
                     if i < len(batches)

@@ -221,8 +221,8 @@
 
                 <td>
 
-                    {% if product.box_weight is not none %}
-                        {{ "%.2f"|format(product.box_weight) }}
+                    {% if product.avg_unit_weight is not none %}
+                        {{ "%.2f"|format(product.avg_unit_weight) }}
                         kg
                     {% else %}
                         —

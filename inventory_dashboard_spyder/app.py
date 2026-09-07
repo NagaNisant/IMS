@@ -1036,6 +1036,106 @@ def api_pallets_by_expiry():
 
 
 # =========================================================
+# API - FIFO PICKLIST
+# =========================================================
+#
+# Given a product and a quantity needed, walks through that
+# product's open batches in FIFO order (nearest expiry first)
+# and allocates the requested quantity across them - one line
+# per pallet/batch that needs to be visited. Used by the
+# Picklist page, and fed into the Export page's Outward form.
+# =========================================================
+
+@app.route("/api/fifo_picklist")
+def api_fifo_picklist():
+
+    product_id = parse_positive_int(request.args.get("product_id", ""))
+    quantity_needed = parse_positive_float(request.args.get("quantity", ""))
+
+    if product_id is None:
+        return jsonify({"error": "Invalid product."}), 400
+
+    if quantity_needed is None:
+        return jsonify({"error": "Please enter a valid quantity."}), 400
+
+    conn = get_db()
+
+    try:
+        product = conn.execute("""
+            SELECT id, name
+            FROM products
+            WHERE id = ?
+        """, (product_id,)).fetchone()
+
+        if not product:
+            return jsonify({"error": "Product not found."}), 404
+
+        batches = conn.execute("""
+            SELECT
+                b.id AS batch_id,
+                pa.pallet_no,
+                b.mfg_date,
+                b.expiry_date,
+                b.unit_type,
+                b.unit_weight,
+                b.boxes
+
+            FROM batches b
+            JOIN pallets pa
+                ON pa.id = b.pallet_id
+
+            WHERE b.product_id = ?
+              AND b.boxes > 0
+
+            ORDER BY
+                (b.expiry_date IS NULL),
+                b.expiry_date ASC,
+                b.id ASC
+        """, (product_id,)).fetchall()
+
+        remaining = quantity_needed
+        lines = []
+
+        for batch in batches:
+
+            if remaining <= 0:
+                break
+
+            take = min(batch["boxes"], remaining)
+
+            lines.append({
+                "batch_id": batch["batch_id"],
+                "pallet_no": batch["pallet_no"],
+                "mfg_date": batch["mfg_date"],
+                "expiry_date": batch["expiry_date"],
+                "unit_type": batch["unit_type"] or "Box",
+                "unit_weight": batch["unit_weight"],
+                "quantity": take,
+                "weight": (
+                    take * batch["unit_weight"]
+                    if batch["unit_weight"] is not None
+                    else None
+                )
+            })
+
+            remaining -= take
+
+        allocated_quantity = quantity_needed - remaining
+
+        return jsonify({
+            "product_id": product["id"],
+            "product_name": product["name"],
+            "requested_quantity": quantity_needed,
+            "allocated_quantity": allocated_quantity,
+            "shortfall": remaining if remaining > 0 else 0,
+            "lines": lines
+        })
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
 # API - PRODUCTS FOR A CUSTOMER
 # =========================================================
 #
@@ -1811,6 +1911,39 @@ def pallet(pallet_no):
 # =========================================================
 # CUSTOMERS
 # =========================================================
+
+# =========================================================
+# PICKLIST PAGE
+# =========================================================
+
+@app.route("/picklist")
+def picklist():
+
+    conn = get_db()
+
+    try:
+        all_products = conn.execute("""
+            SELECT id, name, box_weight
+            FROM products
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+        all_customers = conn.execute("""
+            SELECT id, name
+            FROM customers
+            ORDER BY name COLLATE NOCASE
+        """).fetchall()
+
+        return render_template(
+            "picklist.html",
+            all_products=all_products,
+            all_customers=all_customers,
+            today=date.today().strftime("%Y-%m-%d")
+        )
+
+    finally:
+        close_quietly(conn)
+
 
 @app.route("/customers")
 def customers():
@@ -2658,6 +2791,7 @@ def generate_grn():
     batches = request.form.getlist("batch[]")
     mfg_dates = request.form.getlist("mfg_date[]")
     expiry_dates = request.form.getlist("expiry[]")
+    unit_weights = request.form.getlist("unit_weight[]")
 
     if not voucher_no:
         flash("Voucher number is required.", "error")
@@ -2718,7 +2852,21 @@ def generate_grn():
                 )
                 return redirect(url_for("export_page"))
 
-            weight_per_box = product["box_weight"]
+            # Prefer the weight submitted with this specific row (set
+            # client-side from the actual batch it was picked from,
+            # e.g. via the Picklist page) - only fall back to the
+            # product's last-known catalog weight if that's missing.
+            submitted_weight = (
+                parse_positive_float(unit_weights[i])
+                if i < len(unit_weights)
+                else None
+            )
+
+            weight_per_box = (
+                submitted_weight
+                if submitted_weight is not None
+                else product["box_weight"]
+            )
             net_weight = (
                 quantity * weight_per_box
                 if weight_per_box is not None

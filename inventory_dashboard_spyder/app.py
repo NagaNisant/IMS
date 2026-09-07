@@ -1504,17 +1504,31 @@ def product(product_id):
             SELECT
                 pa.pallet_no,
                 s.boxes AS boxes,
+
                 (
                     SELECT MIN(b.expiry_date)
                     FROM batches b
                     WHERE b.product_id = s.product_id
                       AND b.pallet_id = s.pallet_id
                       AND b.boxes > 0
-                ) AS nearest_expiry
+                ) AS nearest_expiry,
+
+                (
+                    SELECT COALESCE(SUM(
+                        b.boxes * COALESCE(b.unit_weight, p.box_weight, 0)
+                    ), 0)
+                    FROM batches b
+                    WHERE b.product_id = s.product_id
+                      AND b.pallet_id = s.pallet_id
+                      AND b.boxes > 0
+                ) AS weight
+
             FROM pallets pa
             JOIN stock s
                 ON pa.id = s.pallet_id
                 AND s.product_id = ?
+            JOIN products p
+                ON p.id = s.product_id
             WHERE s.boxes > 0
             ORDER BY
                 (nearest_expiry IS NULL),
@@ -1526,9 +1540,31 @@ def product(product_id):
             p["boxes"] for p in pallets
         )
 
-        total_weight = (
-            total_boxes * product["box_weight"]
-            if product["box_weight"] is not None
+        # Weight per unit is captured per BATCH now (it can differ
+        # lot to lot), so total weight is the sum of each open
+        # batch's own boxes * unit_weight - falling back to the
+        # product's catalog box_weight for older batches recorded
+        # before per-batch weight existed.
+        total_weight = conn.execute("""
+            SELECT COALESCE(SUM(
+                b.boxes * COALESCE(b.unit_weight, p.box_weight, 0)
+            ), 0) AS total_weight
+            FROM batches b
+            JOIN products p
+                ON p.id = b.product_id
+            WHERE b.product_id = ?
+              AND b.boxes > 0
+        """, (product_id,)).fetchone()["total_weight"]
+
+        if total_boxes == 0:
+            total_weight = None
+
+        # A representative "per unit" figure for the header - the
+        # weighted average across current stock, since different
+        # batches can have different weights per unit.
+        avg_unit_weight = (
+            total_weight / total_boxes
+            if total_weight is not None and total_boxes
             else None
         )
 
@@ -1540,6 +1576,8 @@ def product(product_id):
                 t.transaction_date,
                 t.mfg_date,
                 t.expiry_date,
+                t.unit_type,
+                t.unit_weight,
                 pa.pallet_no,
                 c.name AS customer_name
             FROM transactions t
@@ -1600,9 +1638,26 @@ def product(product_id):
                 p["boxes"] for p in date_pallets
             )
 
+            date_total_weight_row = conn.execute("""
+                SELECT COALESCE(SUM(
+                    CASE
+                        WHEN t.movement_type = 'Inward'
+                            THEN t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                        WHEN t.movement_type = 'Outward'
+                            THEN -t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                        ELSE 0
+                    END
+                ), 0) AS weight
+                FROM transactions t
+                JOIN products p
+                    ON p.id = t.product_id
+                WHERE t.product_id = ?
+                  AND t.transaction_date <= ?
+            """, (product_id, selected_date)).fetchone()
+
             date_total_weight = (
-                date_total_boxes * product["box_weight"]
-                if product["box_weight"] is not None
+                date_total_weight_row["weight"]
+                if date_total_boxes
                 else None
             )
 
@@ -1611,6 +1666,8 @@ def product(product_id):
                     t.movement_type,
                     t.boxes,
                     t.created_at,
+                    t.unit_type,
+                    t.unit_weight,
                     pa.pallet_no
                 FROM transactions t
                 JOIN pallets pa
@@ -1638,6 +1695,7 @@ def product(product_id):
             date_total_weight=date_total_weight,
             total_boxes=total_boxes,
             total_weight=total_weight,
+            avg_unit_weight=avg_unit_weight,
             history=history,
             all_customers=all_customers,
             today=date.today().strftime("%Y-%m-%d")

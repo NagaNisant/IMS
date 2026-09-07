@@ -461,6 +461,9 @@ def dashboard():
 
         if selected_date == "total":
 
+            # Current stock totals are computed from BATCHES (not
+            # the flat "stock" table) because weight-per-unit is
+            # recorded per batch/lot, not on the product record.
             products = conn.execute("""
                 SELECT
                     p.id,
@@ -469,32 +472,29 @@ def dashboard():
 
                     COALESCE(
                         SUM(
-                            CASE
-                                WHEN s.boxes > 0 THEN s.boxes
-                                ELSE 0
-                            END
+                            CASE WHEN b.boxes > 0 THEN b.boxes ELSE 0 END
                         ), 0
                     ) AS total_boxes,
 
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN s.boxes > 0
-                                THEN s.boxes * p.box_weight
+                                WHEN b.boxes > 0
+                                THEN b.boxes * COALESCE(b.unit_weight, p.box_weight, 0)
                                 ELSE 0
                             END
                         ), 0
                     ) AS total_weight,
 
                     COUNT(
-                        CASE
-                            WHEN s.boxes > 0 THEN 1
+                        DISTINCT CASE
+                            WHEN b.boxes > 0 THEN b.pallet_id
                         END
                     ) AS pallet_count
 
                 FROM products p
-                LEFT JOIN stock s
-                    ON p.id = s.product_id
+                LEFT JOIN batches b
+                    ON p.id = b.product_id
 
                 GROUP BY p.id
                 HAVING total_boxes > 0
@@ -502,13 +502,13 @@ def dashboard():
             """).fetchall()
 
             total_stock = conn.execute("""
-                SELECT COALESCE(
-                    SUM(s.boxes * p.box_weight), 0
-                ) AS total
-                FROM stock s
+                SELECT COALESCE(SUM(
+                    b.boxes * COALESCE(b.unit_weight, p.box_weight, 0)
+                ), 0) AS total
+                FROM batches b
                 JOIN products p
-                    ON p.id = s.product_id
-                WHERE s.boxes > 0
+                    ON p.id = b.product_id
+                WHERE b.boxes > 0
             """).fetchone()["total"]
 
             total_boxes = conn.execute("""
@@ -518,9 +518,9 @@ def dashboard():
             """).fetchone()["total"]
 
             total_inward = conn.execute("""
-                SELECT COALESCE(
-                    SUM(t.boxes * p.box_weight), 0
-                ) AS total
+                SELECT COALESCE(SUM(
+                    t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                ), 0) AS total
                 FROM transactions t
                 JOIN products p
                     ON p.id = t.product_id
@@ -528,9 +528,9 @@ def dashboard():
             """).fetchone()["total"]
 
             total_outward = conn.execute("""
-                SELECT COALESCE(
-                    SUM(t.boxes * p.box_weight), 0
-                ) AS total
+                SELECT COALESCE(SUM(
+                    t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                ), 0) AS total
                 FROM transactions t
                 JOIN products p
                     ON p.id = t.product_id
@@ -545,28 +545,25 @@ def dashboard():
 
                     COALESCE(
                         SUM(
-                            CASE
-                                WHEN s.boxes > 0 THEN s.boxes
-                                ELSE 0
-                            END
+                            CASE WHEN b.boxes > 0 THEN b.boxes ELSE 0 END
                         ), 0
                     ) AS total_boxes,
 
                     COALESCE(
                         SUM(
                             CASE
-                                WHEN s.boxes > 0
-                                THEN s.boxes * p.box_weight
+                                WHEN b.boxes > 0
+                                THEN b.boxes * COALESCE(b.unit_weight, p.box_weight, 0)
                                 ELSE 0
                             END
                         ), 0
                     ) AS total_weight
 
                 FROM pallets pa
-                LEFT JOIN stock s
-                    ON pa.id = s.pallet_id
+                LEFT JOIN batches b
+                    ON pa.id = b.pallet_id
                 LEFT JOIN products p
-                    ON p.id = s.product_id
+                    ON p.id = b.product_id
 
                 GROUP BY pa.id
                 ORDER BY pa.pallet_no
@@ -600,7 +597,19 @@ def dashboard():
                                 ELSE 0
                             END
                         ), 0
-                    ) AS total_boxes
+                    ) AS total_boxes,
+
+                    COALESCE(
+                        SUM(
+                            CASE
+                                WHEN t.movement_type = 'Inward'
+                                    THEN t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                                WHEN t.movement_type = 'Outward'
+                                    THEN -t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                                ELSE 0
+                            END
+                        ), 0
+                    ) AS total_weight
 
                 FROM products p
                 LEFT JOIN transactions t
@@ -612,32 +621,19 @@ def dashboard():
                 ORDER BY p.name COLLATE NOCASE
             """, (selected_date,)).fetchall()
 
-            products = []
+            products = [dict(row) for row in products_raw]
 
-            for p in products_raw:
-                boxes = p["total_boxes"]
-
-                products.append({
-                    "id": p["id"],
-                    "name": p["name"],
-                    "box_weight": p["box_weight"],
-                    "total_boxes": boxes,
-                    "total_weight": (
-                        boxes * p["box_weight"]
-                        if p["box_weight"] is not None
-                        else None
-                    ),
-                    "pallet_count": 0
-                })
+            for row in products:
+                row["pallet_count"] = 0
 
             total_stock = conn.execute("""
                 SELECT COALESCE(
                     SUM(
                         CASE
                             WHEN t.movement_type = 'Inward'
-                                THEN t.boxes * p.box_weight
+                                THEN t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
                             WHEN t.movement_type = 'Outward'
-                                THEN -t.boxes * p.box_weight
+                                THEN -t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
                             ELSE 0
                         END
                     ), 0
@@ -665,9 +661,9 @@ def dashboard():
             """, (selected_date,)).fetchone()["total"]
 
             total_inward = conn.execute("""
-                SELECT COALESCE(
-                    SUM(t.boxes * p.box_weight), 0
-                ) AS total
+                SELECT COALESCE(SUM(
+                    t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                ), 0) AS total
                 FROM transactions t
                 JOIN products p
                     ON p.id = t.product_id
@@ -676,9 +672,9 @@ def dashboard():
             """, (selected_date,)).fetchone()["total"]
 
             total_outward = conn.execute("""
-                SELECT COALESCE(
-                    SUM(t.boxes * p.box_weight), 0
-                ) AS total
+                SELECT COALESCE(SUM(
+                    t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
+                ), 0) AS total
                 FROM transactions t
                 JOIN products p
                     ON p.id = t.product_id
@@ -708,9 +704,9 @@ def dashboard():
                         SUM(
                             CASE
                                 WHEN t.movement_type = 'Inward'
-                                    THEN t.boxes * p.box_weight
+                                    THEN t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
                                 WHEN t.movement_type = 'Outward'
-                                    THEN -t.boxes * p.box_weight
+                                    THEN -t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)
                                 ELSE 0
                             END
                         ), 0
@@ -728,6 +724,17 @@ def dashboard():
             """, (selected_date,)).fetchall()
 
             pallets = [dict(row) for row in pallets_raw]
+
+        if selected_date == "total":
+            products = [dict(row) for row in products]
+        # (else branch already produced `products` as a list of dicts)
+
+        for row in products:
+            row["avg_unit_weight"] = (
+                row["total_weight"] / row["total_boxes"]
+                if row["total_boxes"]
+                else None
+            )
 
         return render_template(
             "dashboard.html",
@@ -1246,6 +1253,17 @@ def add_product():
         if not product:
             flash("Product not found.", "error")
             return redirect(url_for("dashboard"))
+
+        # Keep a "last known weight" on the product record itself -
+        # the authoritative weight lives per-batch/transaction, but
+        # this cached value is what the GRN form, the dashboard's
+        # per-box fallback, and the Add Stock autofill use as a
+        # sensible default until a batch-specific weight overrides it.
+        conn.execute("""
+            UPDATE products
+            SET box_weight = ?
+            WHERE id = ?
+        """, (unit_weight, product_id))
 
         customer = conn.execute("""
             SELECT id, name
@@ -2173,8 +2191,8 @@ def api_grn_items():
             SELECT
                 p.id AS product_id,
                 p.name AS name,
-                p.box_weight AS weight,
-                SUM(t.boxes) AS quantity
+                SUM(t.boxes) AS quantity,
+                SUM(t.boxes * COALESCE(t.unit_weight, p.box_weight, 0)) AS total_weight
 
             FROM transactions t
             JOIN products p
@@ -2191,7 +2209,15 @@ def api_grn_items():
             {
                 "product_id": row["product_id"],
                 "name": row["name"],
-                "weight": row["weight"],
+                # Weighted average per unit for this date/movement -
+                # weight can vary batch to batch, so this is the
+                # closest single "per box" figure that still adds
+                # up to the correct total when multiplied by quantity.
+                "weight": (
+                    row["total_weight"] / row["quantity"]
+                    if row["quantity"]
+                    else 0
+                ),
                 "quantity": row["quantity"]
             }
             for row in rows

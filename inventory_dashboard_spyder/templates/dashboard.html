@@ -661,7 +661,7 @@
 
 const ALL_PRODUCTS = [
 {% for product in all_products %}
-    { id: "{{ product.id }}", name: "{{ product.name|replace('"', '\\"') }}", box_weight: "{{ product.box_weight }}" },
+    { id: "{{ product.id }}", name: "{{ product.name|replace('"', '\\"') }}", box_weight: "{{ product.box_weight if product.box_weight is not none else '' }}" },
 {% endfor %}
 ];
 
@@ -894,7 +894,7 @@ toggleBatchFields();
                     </td>
 
                     <td>
-                        {{ product.box_weight }}
+                        {{ product.box_weight if product.box_weight is not none else "—" }}
                     </td>
 
                     <td>
@@ -902,7 +902,7 @@ toggleBatchFields();
                     </td>
 
                     <td>
-                        {{ product.total_weight }}
+                        {{ product.total_weight if product.total_weight is not none else "—" }}
                     </td>
 
                     <td>

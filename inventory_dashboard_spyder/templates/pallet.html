@@ -221,8 +221,12 @@
 
                 <td>
 
-                    {{ "%.2f"|format(product.box_weight) }}
-                    kg
+                    {% if product.box_weight is not none %}
+                        {{ "%.2f"|format(product.box_weight) }}
+                        kg
+                    {% else %}
+                        —
+                    {% endif %}
 
                 </td>
 
@@ -238,8 +242,12 @@
 
                     <strong>
 
-                        {{ "%.2f"|format(product.weight) }}
-                        kg
+                        {% if product.weight is not none %}
+                            {{ "%.2f"|format(product.weight) }}
+                            kg
+                        {% else %}
+                            —
+                        {% endif %}
 
                     </strong>
 

@@ -57,6 +57,43 @@ small.hint {
     cursor: pointer;
 }
 
+.add-product-btn {
+    height: 42px;
+    border: 1px solid #17202a;
+    border-radius: 7px;
+    background: white;
+    color: #17202a;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.remove-product-btn {
+    height: 42px;
+    border: 1px solid #c0392b;
+    border-radius: 7px;
+    background: white;
+    color: #c0392b;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 14px;
+}
+
+.product-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto;
+    gap: 12px;
+    align-items: end;
+    margin-bottom: 12px;
+    padding: 14px;
+    border: 1px solid #eee;
+    border-radius: 10px;
+    background: #fafafa;
+}
+
+.product-row .form-group {
+    min-width: 0;
+}
+
 #status {
     margin-top: 14px;
     font-size: 14px;
@@ -143,75 +180,132 @@ tfoot td {
 }
 
 @media (max-width: 800px) {
+
     .form-grid {
         grid-template-columns: 1fr;
     }
+
+    .product-row {
+        grid-template-columns: 1fr;
+    }
+
 }
 
 </style>
 
+
 <h1>Picklist</h1>
+
 
 <div class="section no-print">
 
     <h2>Generate a FIFO Picklist</h2>
 
+
     <div class="form-grid">
 
         <div class="form-group">
             <label>Customer</label>
+
             <select id="pickCustomer" onchange="loadCustomerProducts()">
+
                 <option value="">Select Customer</option>
+
                 {% for customer in all_customers %}
-                <option value="{{ customer.id }}">{{ customer.name }}</option>
+
+                <option value="{{ customer.id }}">
+                    {{ customer.name }}
+                </option>
+
                 {% endfor %}
+
             </select>
+
         </div>
 
-        <div class="form-group">
-            <label>Product</label>
-            <select id="pickProduct" disabled>
-                <option value="">Select Customer First</option>
-            </select>
-            <small class="hint" id="productHint"></small>
-        </div>
 
         <div class="form-group">
-            <label>Quantity Needed</label>
-            <input type="number" id="pickQuantity" step="0.01" min="0.01">
-        </div>
 
-        <div class="form-group">
             <label>Date</label>
-            <input type="date" id="pickDate" value="{{ today }}">
+
+            <input
+                type="date"
+                id="pickDate"
+                value="{{ today }}"
+            >
+
         </div>
 
     </div>
 
-    <div style="margin-top: 18px;">
-        <button class="generate-btn" onclick="generatePicklist()">
+
+    <div style="margin-top:20px;">
+
+        <label style="display:block;font-weight:600;font-size:14px;margin-bottom:8px;">
+            Products
+        </label>
+
+
+        <div id="productRows"></div>
+
+
+        <button
+            type="button"
+            class="add-product-btn"
+            onclick="addProductRow()"
+        >
+            + Add Product
+        </button>
+
+    </div>
+
+
+    <div style="margin-top:20px;">
+
+        <button
+            class="generate-btn"
+            onclick="generatePicklist()"
+        >
             Generate Picklist
         </button>
+
     </div>
+
 
     <div id="status"></div>
 
 </div>
 
 
+
 <div class="section" id="resultsSection" style="display:none;">
 
     <div id="printHeader">
-        <h2 style="margin-bottom:4px;">Picklist</h2>
-        <p id="printMeta" style="color:#555;"></p>
+
+        <h2 style="margin-bottom:4px;">
+            Picklist
+        </h2>
+
+        <p
+            id="printMeta"
+            style="color:#555;"
+        ></p>
+
     </div>
 
-    <h2 class="no-print">Pick From (FIFO - nearest expiry first)</h2>
+
+    <h2 class="no-print">
+        Pick From (FIFO - nearest expiry first)
+    </h2>
+
 
     <table>
 
         <thead>
+
             <tr>
+
+                <th>Product</th>
                 <th>Pallet</th>
                 <th>Mfg Date</th>
                 <th>Expiry Date</th>
@@ -219,249 +313,1183 @@ tfoot td {
                 <th>Weight / Unit</th>
                 <th>Quantity to Pick</th>
                 <th>Weight</th>
+
             </tr>
+
         </thead>
+
 
         <tbody id="resultsBody"></tbody>
 
+
         <tfoot>
+
             <tr>
-                <td colspan="5">Total</td>
+
+                <td colspan="6">
+                    Total
+                </td>
+
                 <td id="totalQty"></td>
+
                 <td id="totalWeight"></td>
+
             </tr>
+
         </tfoot>
 
     </table>
 
+
     <div id="shortfallWarning"></div>
 
+
     <div class="action-bar no-print">
-        <button class="btn-primary" onclick="window.print()">
+
+        <button
+            class="btn-primary"
+            onclick="window.print()"
+        >
             🖨️ Print Picklist
         </button>
-        <button class="btn-secondary" onclick="sendToExport()">
+
+
+        <button
+            class="btn-secondary"
+            onclick="sendToExport()"
+        >
             ➜ Send to Export (Outward)
         </button>
+
     </div>
 
 </div>
 
 
+
 <script>
 
+
 const ALL_PRODUCTS = [
+
 {% for product in all_products %}
-    { id: "{{ product.id }}", name: "{{ product.name|replace('"', '\\"') }}" },
+
+{
+    id: "{{ product.id }}",
+    name: "{{ product.name|replace('"', '\\"') }}"
+},
+
 {% endfor %}
+
 ];
+
+
+let customerProducts = [];
 
 let currentPicklist = null;
 
-function setProductOptions(products, placeholder) {
 
-    const select = document.getElementById("pickProduct");
-    const previousValue = select.value;
+/* --------------------------------------------------
+   PRODUCT ROW MANAGEMENT
+-------------------------------------------------- */
 
-    let html = '<option value="">' + placeholder + '</option>';
+
+function addProductRow() {
+
+    const container =
+        document.getElementById("productRows");
+
+
+    const row = document.createElement("div");
+
+    row.className = "product-row";
+
+
+    const productGroup =
+        document.createElement("div");
+
+    productGroup.className = "form-group";
+
+
+    const productLabel =
+        document.createElement("label");
+
+    productLabel.textContent = "Product";
+
+
+    const select =
+        document.createElement("select");
+
+    select.className = "pick-product";
+
+    select.disabled =
+        !document.getElementById("pickCustomer").value;
+
+
+    buildProductOptions(
+        select,
+        customerProducts.length
+            ? customerProducts
+            : ALL_PRODUCTS
+    );
+
+
+    productGroup.appendChild(productLabel);
+
+    productGroup.appendChild(select);
+
+
+    const quantityGroup =
+        document.createElement("div");
+
+    quantityGroup.className = "form-group";
+
+
+    const quantityLabel =
+        document.createElement("label");
+
+    quantityLabel.textContent =
+        "Quantity Needed";
+
+
+    const quantity =
+        document.createElement("input");
+
+    quantity.type = "number";
+
+    quantity.className =
+        "pick-quantity";
+
+    quantity.step = "0.01";
+
+    quantity.min = "0.01";
+
+    quantity.placeholder = "0";
+
+
+    quantityGroup.appendChild(quantityLabel);
+
+    quantityGroup.appendChild(quantity);
+
+
+    const removeButton =
+        document.createElement("button");
+
+    removeButton.type = "button";
+
+    removeButton.className =
+        "remove-product-btn";
+
+    removeButton.textContent =
+        "Remove";
+
+
+    removeButton.onclick = function() {
+
+        row.remove();
+
+        updateRemoveButtons();
+
+    };
+
+
+    row.appendChild(productGroup);
+
+    row.appendChild(quantityGroup);
+
+    row.appendChild(removeButton);
+
+
+    container.appendChild(row);
+
+
+    updateRemoveButtons();
+
+    refreshProductRestrictions();
+
+}
+
+
+/* --------------------------------------------------
+   PRODUCT OPTIONS
+-------------------------------------------------- */
+
+
+function buildProductOptions(select, products) {
+
+    select.innerHTML =
+        '<option value="">Select Product</option>';
+
 
     products.forEach(function(p) {
-        html += '<option value="' + p.id + '">' + p.name + '</option>';
+
+        const option =
+            document.createElement("option");
+
+        option.value = p.id;
+
+        option.textContent = p.name;
+
+        select.appendChild(option);
+
     });
 
-    select.innerHTML = html;
-    select.disabled = products.length === 0;
-
-    if (products.some(function(p) { return String(p.id) === previousValue; })) {
-        select.value = previousValue;
-    }
 }
+
+
+/* --------------------------------------------------
+   CUSTOMER PRODUCT LOADING
+-------------------------------------------------- */
+
 
 async function loadCustomerProducts() {
 
-    const customerId = document.getElementById("pickCustomer").value;
-    const hint = document.getElementById("productHint");
+    const customerId =
+        document.getElementById("pickCustomer").value;
+
+    const statusEl =
+        document.getElementById("status");
+
 
     if (!customerId) {
-        setProductOptions([], "Select Customer First");
-        hint.textContent = "";
-        return;
-    }
 
-    hint.textContent = "Loading this customer's products...";
+        customerProducts = [];
 
-    try {
-        const response = await fetch(
-            "/api/customer_products?customer_id=" + encodeURIComponent(customerId)
-        );
-        const data = await response.json();
-
-        if (!data.products || data.products.length === 0) {
-            setProductOptions(ALL_PRODUCTS, "Select Product");
-            hint.textContent =
-                "No products linked to this customer yet - showing all products.";
-            return;
-        }
-
-        setProductOptions(data.products, "Select Product");
-        hint.textContent = "Showing only products linked to this customer.";
-
-    } catch (err) {
-        setProductOptions(ALL_PRODUCTS, "Select Product");
-        hint.textContent = "Could not filter by customer - showing all products.";
-    }
-}
-
-function fmt(n) {
-    return Number(n).toFixed(2);
-}
-
-async function generatePicklist() {
-
-    const productId = document.getElementById("pickProduct").value;
-    const quantity = document.getElementById("pickQuantity").value;
-    const dateValue = document.getElementById("pickDate").value;
-    const customerSelect = document.getElementById("pickCustomer");
-    const statusEl = document.getElementById("status");
-
-    statusEl.style.color = "#6b7280";
-
-    if (!productId) {
-        statusEl.style.color = "#c0392b";
-        statusEl.textContent = "Please select a product.";
-        return;
-    }
-
-    if (!quantity || Number(quantity) <= 0) {
-        statusEl.style.color = "#c0392b";
-        statusEl.textContent = "Please enter a quantity greater than zero.";
-        return;
-    }
-
-    statusEl.textContent = "Generating...";
-
-    try {
-        const response = await fetch(
-            "/api/fifo_picklist?product_id=" + encodeURIComponent(productId) +
-            "&quantity=" + encodeURIComponent(quantity)
-        );
-        const data = await response.json();
-
-        if (!response.ok) {
-            statusEl.style.color = "#c0392b";
-            statusEl.textContent = data.error || "Could not generate picklist.";
-            return;
-        }
-
-        currentPicklist = data;
-        currentPicklist.customer_id = customerSelect.value;
-        currentPicklist.customer_name =
-            customerSelect.options[customerSelect.selectedIndex]
-                ? customerSelect.options[customerSelect.selectedIndex].text
-                : "";
-        currentPicklist.date = dateValue;
-
-        renderPicklist();
+        updateAllProductSelects();
 
         statusEl.textContent = "";
 
-    } catch (err) {
-        statusEl.style.color = "#c0392b";
-        statusEl.textContent = "Something went wrong generating the picklist.";
+        return;
+
     }
+
+
+    statusEl.style.color = "#6b7280";
+
+    statusEl.textContent =
+        "Loading this customer's products...";
+
+
+    try {
+
+        const response = await fetch(
+            "/api/customer_products?customer_id=" +
+            encodeURIComponent(customerId)
+        );
+
+
+        const data =
+            await response.json();
+
+
+        if (
+            data.products &&
+            data.products.length > 0
+        ) {
+
+            customerProducts =
+                data.products;
+
+
+            updateAllProductSelects();
+
+
+            statusEl.textContent =
+                "Showing only products linked to this customer.";
+
+        }
+
+        else {
+
+            customerProducts =
+                ALL_PRODUCTS;
+
+
+            updateAllProductSelects();
+
+
+            statusEl.textContent =
+                "No products linked to this customer yet - showing all products.";
+
+        }
+
+    }
+
+    catch (err) {
+
+        customerProducts =
+            ALL_PRODUCTS;
+
+
+        updateAllProductSelects();
+
+
+        statusEl.textContent =
+            "Could not filter by customer - showing all products.";
+
+    }
+
 }
+
+
+/* --------------------------------------------------
+   UPDATE ALL PRODUCT DROPDOWNS
+-------------------------------------------------- */
+
+
+function updateAllProductSelects() {
+
+    const selects =
+        document.querySelectorAll(".pick-product");
+
+
+    selects.forEach(function(select) {
+
+        const oldValue =
+            select.value;
+
+
+        buildProductOptions(
+            select,
+            customerProducts.length
+                ? customerProducts
+                : ALL_PRODUCTS
+        );
+
+
+        select.value =
+            oldValue;
+
+    });
+
+
+    refreshProductRestrictions();
+
+}
+
+
+/* --------------------------------------------------
+   PREVENT DUPLICATE PRODUCTS
+-------------------------------------------------- */
+
+
+function refreshProductRestrictions() {
+
+    const selects =
+        document.querySelectorAll(".pick-product");
+
+
+    const selectedValues =
+        Array.from(selects)
+            .map(function(select) {
+
+                return select.value;
+
+            })
+            .filter(function(value) {
+
+                return value !== "";
+
+            });
+
+
+    selects.forEach(function(select) {
+
+        const ownValue =
+            select.value;
+
+
+        Array.from(select.options)
+            .forEach(function(option) {
+
+                if (!option.value) {
+
+                    return;
+
+                }
+
+
+                option.disabled =
+                    selectedValues.includes(
+                        option.value
+                    ) &&
+                    option.value !== ownValue;
+
+            });
+
+    });
+
+}
+
+
+document.addEventListener(
+    "change",
+    function(event) {
+
+        if (
+            event.target.classList &&
+            event.target.classList.contains(
+                "pick-product"
+            )
+        ) {
+
+            refreshProductRestrictions();
+
+        }
+
+    }
+);
+
+
+/* --------------------------------------------------
+   REMOVE BUTTON HANDLING
+-------------------------------------------------- */
+
+
+function updateRemoveButtons() {
+
+    const rows =
+        document.querySelectorAll(".product-row");
+
+
+    rows.forEach(function(row) {
+
+        const button =
+            row.querySelector(
+                ".remove-product-btn"
+            );
+
+
+        if (rows.length === 1) {
+
+            button.style.display =
+                "none";
+
+        }
+
+        else {
+
+            button.style.display =
+                "";
+
+        }
+
+    });
+
+}
+
+
+/* --------------------------------------------------
+   FORMAT NUMBER
+-------------------------------------------------- */
+
+
+function fmt(n) {
+
+    return Number(n).toFixed(2);
+
+}
+
+
+/* --------------------------------------------------
+   GENERATE MULTI-PRODUCT PICKLIST
+-------------------------------------------------- */
+
+
+async function generatePicklist() {
+
+    const customerSelect =
+        document.getElementById("pickCustomer");
+
+    const dateValue =
+        document.getElementById("pickDate").value;
+
+    const statusEl =
+        document.getElementById("status");
+
+
+    const rows =
+        document.querySelectorAll(
+            ".product-row"
+        );
+
+
+    statusEl.style.color = "#6b7280";
+
+
+    if (!customerSelect.value) {
+
+        statusEl.style.color = "#c0392b";
+
+        statusEl.textContent =
+            "Please select a customer.";
+
+        return;
+
+    }
+
+
+    if (!rows.length) {
+
+        statusEl.style.color = "#c0392b";
+
+        statusEl.textContent =
+            "Please add at least one product.";
+
+        return;
+
+    }
+
+
+    const requests = [];
+
+
+    for (
+        let i = 0;
+        i < rows.length;
+        i++
+    ) {
+
+        const row = rows[i];
+
+
+        const productSelect =
+            row.querySelector(
+                ".pick-product"
+            );
+
+
+        const quantityInput =
+            row.querySelector(
+                ".pick-quantity"
+            );
+
+
+        const productId =
+            productSelect.value;
+
+
+        const quantity =
+            quantityInput.value;
+
+
+        if (!productId) {
+
+            statusEl.style.color =
+                "#c0392b";
+
+            statusEl.textContent =
+                "Please select a product for row " +
+                (i + 1) +
+                ".";
+
+            return;
+
+        }
+
+
+        if (
+            !quantity ||
+            Number(quantity) <= 0
+        ) {
+
+            statusEl.style.color =
+                "#c0392b";
+
+            statusEl.textContent =
+                "Please enter a quantity greater than zero for row " +
+                (i + 1) +
+                ".";
+
+            return;
+
+        }
+
+
+        requests.push({
+
+            productId: productId,
+
+            quantity: quantity,
+
+            productName:
+                productSelect.options[
+                    productSelect.selectedIndex
+                ].text
+
+        });
+
+    }
+
+
+    statusEl.textContent =
+        "Generating picklist...";
+
+
+    try {
+
+        const results = [];
+
+
+        for (
+            let i = 0;
+            i < requests.length;
+            i++
+        ) {
+
+            const request =
+                requests[i];
+
+
+            const response =
+                await fetch(
+                    "/api/fifo_picklist?product_id=" +
+                    encodeURIComponent(
+                        request.productId
+                    ) +
+                    "&quantity=" +
+                    encodeURIComponent(
+                        request.quantity
+                    )
+                );
+
+
+            const data =
+                await response.json();
+
+
+            if (!response.ok) {
+
+                statusEl.style.color =
+                    "#c0392b";
+
+                statusEl.textContent =
+                    data.error ||
+                    "Could not generate picklist for " +
+                    request.productName +
+                    ".";
+
+                return;
+
+            }
+
+
+            results.push({
+
+                productId:
+                    request.productId,
+
+                productName:
+                    data.product_name ||
+                    request.productName,
+
+                requestedQuantity:
+                    Number(
+                        data.requested_quantity ||
+                        request.quantity
+                    ),
+
+                allocatedQuantity:
+                    Number(
+                        data.allocated_quantity ||
+                        0
+                    ),
+
+                shortfall:
+                    Number(
+                        data.shortfall ||
+                        0
+                    ),
+
+                lines:
+                    (data.lines || []).map(
+                        function(line) {
+
+                            return {
+
+                                ...line,
+
+                                product_id:
+                                    request.productId,
+
+                                product_name:
+                                    data.product_name ||
+                                    request.productName
+
+                            };
+
+                        }
+                    )
+
+            });
+
+        }
+
+
+        const allLines = [];
+
+        let totalRequested = 0;
+
+        let totalAllocated = 0;
+
+        let totalShortfall = 0;
+
+
+        results.forEach(function(result) {
+
+            totalRequested +=
+                result.requestedQuantity;
+
+
+            totalAllocated +=
+                result.allocatedQuantity;
+
+
+            totalShortfall +=
+                result.shortfall;
+
+
+            result.lines.forEach(
+                function(line) {
+
+                    allLines.push(line);
+
+                }
+            );
+
+        });
+
+
+        currentPicklist = {
+
+            customer_id:
+                customerSelect.value,
+
+            customer_name:
+                customerSelect.options[
+                    customerSelect.selectedIndex
+                ]
+                    ? customerSelect.options[
+                        customerSelect.selectedIndex
+                    ].text
+                    : "",
+
+            date:
+                dateValue,
+
+            requested_quantity:
+                totalRequested,
+
+            allocated_quantity:
+                totalAllocated,
+
+            shortfall:
+                totalShortfall,
+
+            product_count:
+                results.length,
+
+            products:
+                results,
+
+            lines:
+                allLines
+
+        };
+
+
+        renderPicklist();
+
+
+        statusEl.textContent = "";
+
+    }
+
+    catch (err) {
+
+        console.error(err);
+
+        statusEl.style.color =
+            "#c0392b";
+
+        statusEl.textContent =
+            "Something went wrong generating the picklist.";
+
+    }
+
+}
+
+
+/* --------------------------------------------------
+   RENDER PICKLIST
+-------------------------------------------------- */
+
 
 function renderPicklist() {
 
-    const data = currentPicklist;
-    const tbody = document.getElementById("resultsBody");
+    const data =
+        currentPicklist;
+
+
+    const tbody =
+        document.getElementById(
+            "resultsBody"
+        );
+
+
     tbody.innerHTML = "";
 
+
     let totalQty = 0;
+
     let totalWeight = 0;
+
     let hasWeight = true;
+
 
     data.lines.forEach(function(line) {
 
-        totalQty += line.quantity;
+        totalQty +=
+            Number(line.quantity || 0);
 
-        if (line.weight !== null && line.weight !== undefined) {
-            totalWeight += line.weight;
-        } else {
-            hasWeight = false;
+
+        if (
+            line.weight !== null &&
+            line.weight !== undefined
+        ) {
+
+            totalWeight +=
+                Number(line.weight || 0);
+
         }
 
-        const row = document.createElement("tr");
+        else {
+
+            hasWeight = false;
+
+        }
+
+
+        const row =
+            document.createElement("tr");
+
+
         row.innerHTML =
-            "<td>P" + String(line.pallet_no).padStart(2, "0") + "</td>" +
-            "<td>" + (line.mfg_date || "—") + "</td>" +
-            "<td>" + (line.expiry_date || "—") + "</td>" +
-            "<td>" + (line.unit_type || "Box") + "</td>" +
-            "<td>" + (line.unit_weight !== null && line.unit_weight !== undefined ? fmt(line.unit_weight) + " kg" : "—") + "</td>" +
-            "<td>" + fmt(line.quantity) + "</td>" +
-            "<td>" + (line.weight !== null && line.weight !== undefined ? fmt(line.weight) + " kg" : "—") + "</td>";
+
+            "<td>" +
+            (line.product_name || "—") +
+            "</td>" +
+
+            "<td>P" +
+            String(
+                line.pallet_no
+            ).padStart(2, "0") +
+            "</td>" +
+
+            "<td>" +
+            (
+                line.mfg_date ||
+                "—"
+            ) +
+            "</td>" +
+
+            "<td>" +
+            (
+                line.expiry_date ||
+                "—"
+            ) +
+            "</td>" +
+
+            "<td>" +
+            (
+                line.unit_type ||
+                "Box"
+            ) +
+            "</td>" +
+
+            "<td>" +
+
+            (
+                line.unit_weight !==
+                    null &&
+                line.unit_weight !==
+                    undefined
+
+                    ? fmt(
+                        line.unit_weight
+                    ) +
+                    " kg"
+
+                    : "—"
+
+            ) +
+
+            "</td>" +
+
+            "<td>" +
+            fmt(line.quantity) +
+            "</td>" +
+
+            "<td>" +
+
+            (
+                line.weight !==
+                    null &&
+                line.weight !==
+                    undefined
+
+                    ? fmt(
+                        line.weight
+                    ) +
+                    " kg"
+
+                    : "—"
+
+            ) +
+
+            "</td>";
+
+
         tbody.appendChild(row);
+
     });
 
-    document.getElementById("totalQty").textContent = fmt(totalQty);
-    document.getElementById("totalWeight").textContent =
-        hasWeight ? fmt(totalWeight) + " kg" : "—";
 
-    const warningEl = document.getElementById("shortfallWarning");
+    document.getElementById(
+        "totalQty"
+    ).textContent =
+        fmt(totalQty);
+
+
+    document.getElementById(
+        "totalWeight"
+    ).textContent =
+
+        hasWeight
+
+            ? fmt(totalWeight) +
+              " kg"
+
+            : "—";
+
+
+    const warningEl =
+        document.getElementById(
+            "shortfallWarning"
+        );
+
+
     if (data.shortfall > 0) {
-        warningEl.className = "warning";
+
+        warningEl.className =
+            "warning";
+
+
+        const shortfallProducts =
+            data.products
+                .filter(function(product) {
+
+                    return product.shortfall > 0;
+
+                })
+                .map(function(product) {
+
+                    return (
+                        product.productName +
+                        " short by " +
+                        fmt(
+                            product.shortfall
+                        )
+                    );
+
+                });
+
+
         warningEl.textContent =
-            "Only " + fmt(data.allocated_quantity) + " of " +
-            fmt(data.requested_quantity) + " requested is currently in stock " +
-            "(short by " + fmt(data.shortfall) + ").";
-    } else {
-        warningEl.className = "";
-        warningEl.textContent = "";
+            "Some requested quantities are not fully available: " +
+            shortfallProducts.join(", ") +
+            ".";
+
     }
 
-    document.getElementById("printMeta").textContent =
-        data.product_name +
-        (data.customer_name ? " — " + data.customer_name : "") +
-        (data.date ? " — " + data.date : "") +
-        " — Requested: " + fmt(data.requested_quantity);
+    else {
 
-    document.getElementById("resultsSection").style.display = "";
+        warningEl.className = "";
+
+        warningEl.textContent = "";
+
+    }
+
+
+    document.getElementById(
+        "printMeta"
+    ).textContent =
+
+        data.product_count +
+        " product(s)" +
+
+        (
+            data.customer_name
+                ? " — " +
+                  data.customer_name
+                : ""
+        ) +
+
+        (
+            data.date
+                ? " — " +
+                  data.date
+                : ""
+        ) +
+
+        " — Requested: " +
+        fmt(
+            data.requested_quantity
+        );
+
+
+    document.getElementById(
+        "resultsSection"
+    ).style.display = "";
+
 }
+
+
+/* --------------------------------------------------
+   DATE FORMAT
+-------------------------------------------------- */
+
 
 function toDDMMYYYY(iso) {
-    if (!iso) return "";
-    const parts = iso.split("-");
-    if (parts.length !== 3) return iso;
-    return parts[2] + "-" + parts[1] + "-" + parts[0];
+
+    if (!iso) {
+        return "";
+    }
+
+
+    const parts =
+        iso.split("-");
+
+
+    if (
+        parts.length !== 3
+    ) {
+
+        return iso;
+
+    }
+
+
+    return (
+        parts[2] +
+        "-" +
+        parts[1] +
+        "-" +
+        parts[0]
+    );
+
 }
+
+
+/* --------------------------------------------------
+   SEND MULTI-PRODUCT PICKLIST TO EXPORT
+-------------------------------------------------- */
+
 
 function sendToExport() {
 
     if (!currentPicklist) {
+
         return;
+
     }
 
+
+    const items = [];
+
+
+    currentPicklist.lines.forEach(
+        function(line) {
+
+            items.push({
+
+                product_id:
+                    line.product_id,
+
+                quantity:
+                    line.quantity,
+
+                batch:
+                    "P" +
+                    String(
+                        line.pallet_no
+                    ).padStart(2, "0"),
+
+                mfg_date:
+                    toDDMMYYYY(
+                        line.mfg_date
+                    ),
+
+                expiry_date:
+                    toDDMMYYYY(
+                        line.expiry_date
+                    ),
+
+                order_unit:
+                    line.unit_type ||
+                    "Box",
+
+                unit_weight:
+                    line.unit_weight
+
+            });
+
+        }
+    );
+
+
     const payload = {
-        movement_type: "Outward",
-        date: currentPicklist.date,
-        number_boxes: currentPicklist.allocated_quantity,
-        items: currentPicklist.lines.map(function(line) {
-            return {
-                product_id: currentPicklist.product_id,
-                quantity: line.quantity,
-                batch: "P" + String(line.pallet_no).padStart(2, "0"),
-                mfg_date: toDDMMYYYY(line.mfg_date),
-                expiry_date: toDDMMYYYY(line.expiry_date),
-                order_unit: line.unit_type || "Box",
-                unit_weight: line.unit_weight
-            };
-        })
+
+        movement_type:
+            "Outward",
+
+        date:
+            currentPicklist.date,
+
+        number_boxes:
+            currentPicklist.allocated_quantity,
+
+        items:
+            items
+
     };
 
-    sessionStorage.setItem("pendingPicklist", JSON.stringify(payload));
 
-    window.location.href = "{{ url_for('export_page') }}";
+    sessionStorage.setItem(
+        "pendingPicklist",
+        JSON.stringify(payload)
+    );
+
+
+    window.location.href =
+        "{{ url_for('export_page') }}";
+
 }
+
+
+/* --------------------------------------------------
+   INITIAL ROW
+-------------------------------------------------- */
+
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        addProductRow();
+
+    }
+);
 
 </script>
 

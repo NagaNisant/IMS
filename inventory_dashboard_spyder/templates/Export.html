@@ -652,6 +652,12 @@ function addItem(prefill) {
                 placeholder="Auto"
             >
 
+            <input
+                type="hidden"
+                name="unit_weight[]"
+                class="unit-weight-hidden"
+            >
+
         </td>
 
 
@@ -752,6 +758,40 @@ function addItem(prefill) {
         row.querySelector('input[name="quantity[]"]').value = prefill.quantity;
     }
 
+    if (prefill && prefill.batch) {
+        row.querySelector('input[name="batch[]"]').value = prefill.batch;
+    }
+
+    if (prefill && prefill.mfg_date) {
+        row.querySelector('input[name="mfg_date[]"]').value = prefill.mfg_date;
+    }
+
+    if (prefill && prefill.expiry_date) {
+        row.querySelector('input[name="expiry[]"]').value = prefill.expiry_date;
+    }
+
+    if (prefill && prefill.order_unit) {
+        const unitSelect = row.querySelector('select[name="order_unit[]"]');
+        for (let i = 0; i < unitSelect.options.length; i++) {
+            if (unitSelect.options[i].text.trim() === prefill.order_unit) {
+                unitSelect.selectedIndex = i;
+                break;
+            }
+        }
+    }
+
+    const effectiveWeight =
+        (prefill && prefill.unit_weight !== undefined && prefill.unit_weight !== null)
+            ? prefill.unit_weight
+            : (prefill && prefill.weight !== undefined && prefill.weight !== null)
+                ? prefill.weight
+                : null;
+
+    if (effectiveWeight !== null) {
+        row.querySelector(".weight").value = Number(effectiveWeight).toFixed(2) + " kg";
+        row.querySelector(".unit-weight-hidden").value = effectiveWeight;
+    }
+
 }
 
 
@@ -783,6 +823,8 @@ function updateWeight(select) {
         weight
         ? weight + " kg"
         : "";
+
+    row.querySelector(".unit-weight-hidden").value = weight || "";
 
 }
 
@@ -855,9 +897,63 @@ async function loadItemsForDate() {
 }
 
 
-// Automatically create first item
+// Automatically create first item, unless a picklist generated on
+// the Picklist page is waiting to be applied here (see
+// applyPendingPicklist below).
 
-addItem();
+function applyPendingPicklist() {
+
+    const raw = sessionStorage.getItem("pendingPicklist");
+
+    if (!raw) {
+        return false;
+    }
+
+    sessionStorage.removeItem("pendingPicklist");
+
+    let payload;
+    try {
+        payload = JSON.parse(raw);
+    } catch (err) {
+        return false;
+    }
+
+    if (!payload.items || payload.items.length === 0) {
+        return false;
+    }
+
+    if (payload.movement_type) {
+        document.getElementById("autofillMovementType").value = payload.movement_type;
+    }
+
+    if (payload.date) {
+        document.getElementById("autofillDate").value = payload.date;
+    }
+
+    if (payload.number_boxes !== undefined && payload.number_boxes !== null) {
+        document.querySelector('input[name="number_boxes"]').value =
+            Number(payload.number_boxes).toFixed(2);
+    }
+
+    const tbody = document.getElementById("itemsBody");
+    tbody.innerHTML = "";
+
+    payload.items.forEach(function(item) {
+        addItem(item);
+    });
+
+    const statusEl = document.getElementById("autofillStatus");
+    statusEl.style.color = "#1e8449";
+    statusEl.textContent =
+        "Loaded " + payload.items.length +
+        " item(s) from the Picklist page. You can still edit any field.";
+
+    return true;
+}
+
+if (!applyPendingPicklist()) {
+    addItem();
+}
 
 </script>
 

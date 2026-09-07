@@ -128,10 +128,10 @@
         </h1>
 
         <p class="subtitle">
-            {% if product.box_weight is not none %}
-                {{ "%.2f"|format(product.box_weight) }} kg per box
+            {% if avg_unit_weight is not none %}
+                {{ "%.2f"|format(avg_unit_weight) }} kg / unit (avg, current stock)
             {% else %}
-                No catalog weight on file
+                No weight recorded yet
             {% endif %}
         </p>
 
@@ -237,7 +237,9 @@
                 <td>P{{ "%02d"|format(item.pallet_no) }}</td>
                 <td>{{ "%.2f"|format(item.boxes) }}</td>
                 <td>
-                    {% if product.box_weight is not none %}
+                    {% if item.unit_weight is not none %}
+                        {{ "%.2f"|format(item.boxes * item.unit_weight) }} kg
+                    {% elif product.box_weight is not none %}
                         {{ "%.2f"|format(item.boxes * product.box_weight) }} kg
                     {% else %}
                         —
@@ -296,12 +298,12 @@
     <div class="summary-box">
 
         <div class="summary-label">
-            Weight / Box
+            Avg Weight / Unit
         </div>
 
         <div class="summary-value">
-            {% if product.box_weight is not none %}
-                {{ "%.2f"|format(product.box_weight) }} kg
+            {% if avg_unit_weight is not none %}
+                {{ "%.2f"|format(avg_unit_weight) }} kg
             {% else %}
                 —
             {% endif %}
@@ -379,13 +381,8 @@
 
                 <td>
 
-                    {% if product.box_weight is not none %}
-                        {{
-                            "%.2f"|format(
-                                pallet.boxes *
-                                product.box_weight
-                            )
-                        }}
+                    {% if pallet.weight %}
+                        {{ "%.2f"|format(pallet.weight) }}
                         kg
                     {% else %}
                         —
@@ -498,7 +495,15 @@
 
                 <td>
 
-                    {% if product.box_weight is not none %}
+                    {% if item.unit_weight is not none %}
+                        {{
+                            "%.2f"|format(
+                                item.boxes *
+                                item.unit_weight
+                            )
+                        }}
+                        kg
+                    {% elif product.box_weight is not none %}
                         {{
                             "%.2f"|format(
                                 item.boxes *

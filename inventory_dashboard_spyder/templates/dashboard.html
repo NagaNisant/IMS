@@ -307,7 +307,7 @@
         <h3>Current Stock</h3>
 
         <div class="value">
-            {{ total_stock }}
+            {{ "%.2f"|format(total_stock) }} kg
         </div>
 
     </div>
@@ -329,7 +329,7 @@
         <h3>Inward</h3>
 
         <div class="value">
-            {{ total_inward }}
+            {{ "%.2f"|format(total_inward) }} kg
         </div>
 
     </div>
@@ -340,7 +340,7 @@
         <h3>Outward</h3>
 
         <div class="value">
-            {{ total_outward }}
+            {{ "%.2f"|format(total_outward) }} kg
         </div>
 
     </div>
@@ -859,7 +859,7 @@ toggleBatchFields();
                     </th>
 
                     <th>
-                        Box Weight
+                        Avg Weight / Unit
                     </th>
 
                     <th>
@@ -894,7 +894,11 @@ toggleBatchFields();
                     </td>
 
                     <td>
-                        {{ product.box_weight if product.box_weight is not none else "—" }}
+                        {% if product.avg_unit_weight is not none %}
+                            {{ "%.2f"|format(product.avg_unit_weight) }} kg
+                        {% else %}
+                            —
+                        {% endif %}
                     </td>
 
                     <td>
@@ -902,7 +906,7 @@ toggleBatchFields();
                     </td>
 
                     <td>
-                        {{ product.total_weight if product.total_weight is not none else "—" }}
+                        {{ "%.2f"|format(product.total_weight) }} kg
                     </td>
 
                     <td>
@@ -953,7 +957,7 @@ toggleBatchFields();
 
             <p>
                 Weight:
-                {{ pallet.total_weight }}
+                {{ "%.2f"|format(pallet.total_weight) }} kg
             </p>
 
             <a href="{{ url_for('pallet', pallet_no=pallet.pallet_no) }}">

@@ -1733,7 +1733,17 @@ def pallet(pallet_no):
                 p.name,
                 p.box_weight,
                 s.boxes,
-                s.boxes * p.box_weight AS weight,
+
+                (
+                    SELECT COALESCE(SUM(
+                        b.boxes * COALESCE(b.unit_weight, p.box_weight, 0)
+                    ), 0)
+                    FROM batches b
+                    WHERE b.product_id = p.id
+                      AND b.pallet_id = s.pallet_id
+                      AND b.boxes > 0
+                ) AS weight,
+
                 (
                     SELECT MIN(b.expiry_date)
                     FROM batches b
@@ -1748,6 +1758,18 @@ def pallet(pallet_no):
               AND s.boxes > 0
             ORDER BY p.name COLLATE NOCASE
         """, (pallet["id"],)).fetchall()
+
+        products = [dict(row) for row in products]
+
+        for row in products:
+            # Weighted-average per unit for this product on this
+            # pallet, for the "Weight / Box" column - actual weight
+            # per unit can vary batch to batch now.
+            row["avg_unit_weight"] = (
+                row["weight"] / row["boxes"]
+                if row["boxes"]
+                else None
+            )
 
         total_boxes = sum(
             p["boxes"] for p in products

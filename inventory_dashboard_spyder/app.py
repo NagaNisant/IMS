@@ -2547,7 +2547,8 @@ def draw_wrapped_text(pdf, text, x, y, max_width, line_height=9, font="Helvetica
 
 def draw_grn_header(pdf, width, height, voucher_no, grn_date, ref,
                     vehicle_no, credit_days, driver_name, product_temp,
-                    out_time, driver_contact, in_time):
+                    out_time, driver_contact, in_time,
+                    document_title="GOODS RECEIVED NOTE"):
 
     pdf.setLineWidth(1)
 
@@ -2562,7 +2563,7 @@ def draw_grn_header(pdf, width, height, voucher_no, grn_date, ref,
     pdf.drawCentredString(
         width / 2,
         height - 42,
-        "GOODS RECEIVED NOTE"
+        document_title
     )
 
     top_y = height - 55
@@ -2785,6 +2786,22 @@ def generate_grn():
     packing_slip = request.form.get("packing_slip", "").strip()
     number_boxes = request.form.get("number_boxes", "").strip()
 
+    movement_type = request.form.get("movement_type", "Inward").strip()
+    if movement_type not in ("Inward", "Outward"):
+        movement_type = "Inward"
+
+    document_title = (
+        "DELIVERY CHALLAN"
+        if movement_type == "Outward"
+        else "GOODS RECEIVED NOTE"
+    )
+
+    document_filename_word = (
+        "Delivery_Challan"
+        if movement_type == "Outward"
+        else "Goods_Received_Note"
+    )
+
     product_ids = request.form.getlist("product_id[]")
     quantities = request.form.getlist("quantity[]")
     order_units = request.form.getlist("order_unit[]")
@@ -2957,7 +2974,8 @@ def generate_grn():
             product_temp,
             out_time,
             driver_contact,
-            in_time
+            in_time,
+            document_title=document_title
         )
 
         # -------------------------------------------------
@@ -3352,9 +3370,9 @@ def generate_grn():
     )
 
     filename = (
-        f"Goods_Received_Note_{safe_voucher}.pdf"
+        f"{document_filename_word}_{safe_voucher}.pdf"
         if safe_voucher
-        else "Goods_Received_Note.pdf"
+        else f"{document_filename_word}.pdf"
     )
 
     return send_file(

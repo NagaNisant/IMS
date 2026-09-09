@@ -1136,6 +1136,184 @@ def api_fifo_picklist():
 
 
 # =========================================================
+# API - FULFILL PICKLIST (ACTUALLY DEDUCT THE STOCK)
+# =========================================================
+#
+# Takes the batch-level allocation a picklist generated (each
+# line names an exact batch_id and how much to take from it) and
+# applies it as a real Outward movement - decrementing that
+# batch, updating the pallet's stock total, and logging a
+# transaction, exactly like a manual Outward entry on the
+# dashboard would. This is what makes "generate a picklist" and
+# "remove that stock" the same action instead of two separate
+# manual steps.
+#
+# Expects JSON:
+# {
+#   "date": "YYYY-MM-DD",
+#   "groups": [
+#     {
+#       "customer_id": 1,
+#       "product_id": 2,
+#       "lines": [
+#         {"batch_id": 5, "quantity": 10}, ...
+#       ]
+#     }, ...
+#   ]
+# }
+# =========================================================
+
+@app.route("/api/fulfill_picklist", methods=["POST"])
+def api_fulfill_picklist():
+
+    data = request.get_json(silent=True) or {}
+
+    transaction_date = str(data.get("date", "")).strip()
+    groups = data.get("groups", [])
+
+    if not valid_date(transaction_date):
+        return jsonify({"error": "Please choose a valid date."}), 400
+
+    if not groups:
+        return jsonify({"error": "Nothing to fulfil."}), 400
+
+    conn = get_db()
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    try:
+        for group in groups:
+
+            customer_id = parse_positive_int(group.get("customer_id"))
+            product_id = parse_positive_int(group.get("product_id"))
+            lines = group.get("lines", [])
+
+            if customer_id is None or product_id is None:
+                conn.rollback()
+                return jsonify({
+                    "error": "Each group needs a valid customer and product."
+                }), 400
+
+            product = conn.execute("""
+                SELECT id, name FROM products WHERE id = ?
+            """, (product_id,)).fetchone()
+
+            if not product:
+                conn.rollback()
+                return jsonify({"error": "Product not found."}), 404
+
+            for line in lines:
+
+                batch_id = parse_positive_int(line.get("batch_id"))
+                quantity = parse_positive_float(line.get("quantity"))
+
+                if batch_id is None or quantity is None:
+                    conn.rollback()
+                    return jsonify({
+                        "error": "Each line needs a valid batch and quantity."
+                    }), 400
+
+                batch = conn.execute("""
+                    SELECT id, product_id, pallet_id, boxes,
+                           expiry_date, unit_type, unit_weight
+                    FROM batches
+                    WHERE id = ?
+                """, (batch_id,)).fetchone()
+
+                if not batch or batch["product_id"] != product_id:
+                    conn.rollback()
+                    return jsonify({
+                        "error": f"Batch for {product['name']} is no "
+                                 f"longer available - please regenerate "
+                                 f"the picklist."
+                    }), 409
+
+                if quantity > batch["boxes"]:
+                    conn.rollback()
+                    return jsonify({
+                        "error": f"Only {batch['boxes']} left in that "
+                                 f"batch of {product['name']} now (someone "
+                                 f"else may have moved stock) - please "
+                                 f"regenerate the picklist."
+                    }), 409
+
+                # Decrement the exact batch this line was picked from.
+                conn.execute("""
+                    UPDATE batches
+                    SET boxes = boxes - ?
+                    WHERE id = ?
+                """, (quantity, batch_id))
+
+                # Roll that down into the pallet's aggregate stock total.
+                current = conn.execute("""
+                    SELECT boxes FROM stock
+                    WHERE product_id = ? AND pallet_id = ?
+                """, (product_id, batch["pallet_id"])).fetchone()
+
+                current_boxes = current["boxes"] if current else 0
+                new_boxes = current_boxes - quantity
+
+                if new_boxes <= 0:
+                    conn.execute("""
+                        DELETE FROM stock
+                        WHERE product_id = ? AND pallet_id = ?
+                    """, (product_id, batch["pallet_id"]))
+                else:
+                    conn.execute("""
+                        UPDATE stock
+                        SET boxes = ?
+                        WHERE product_id = ? AND pallet_id = ?
+                    """, (new_boxes, product_id, batch["pallet_id"]))
+
+                conn.execute("""
+                    INSERT INTO transactions (
+                        product_id,
+                        pallet_id,
+                        movement_type,
+                        boxes,
+                        created_at,
+                        transaction_date,
+                        customer_id,
+                        mfg_date,
+                        expiry_date,
+                        unit_type,
+                        unit_weight
+                    )
+                    VALUES (?, ?, 'Outward', ?, ?, ?, ?, NULL, ?, ?, ?)
+                """, (
+                    product_id,
+                    batch["pallet_id"],
+                    quantity,
+                    created_at,
+                    transaction_date,
+                    customer_id,
+                    batch["expiry_date"],
+                    batch["unit_type"],
+                    batch["unit_weight"]
+                ))
+
+                # Keep the "last known weight" cache fresh, same as a
+                # manual Add Stock entry would.
+                if batch["unit_weight"] is not None:
+                    conn.execute("""
+                        UPDATE products
+                        SET box_weight = ?
+                        WHERE id = ?
+                    """, (batch["unit_weight"], product_id))
+
+        conn.commit()
+        return jsonify({"success": True})
+
+    except sqlite3.Error:
+        conn.rollback()
+        return jsonify({
+            "error": "A database error occurred while removing stock."
+        }), 500
+
+    finally:
+        close_quietly(conn)
+
+
+# =========================================================
 # API - PRODUCTS FOR A CUSTOMER
 # =========================================================
 #
